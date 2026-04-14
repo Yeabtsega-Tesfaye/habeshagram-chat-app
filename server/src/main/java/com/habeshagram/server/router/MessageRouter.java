@@ -41,21 +41,22 @@ public class MessageRouter {
         }
     }
     
-    public void routeGroup(Message message) {
-        String groupName = message.getRecipient();
-        com.habeshagram.common.model.Group group = groupDAO.getGroup(groupName);
-        
-        if (group != null) {
-            for (String member : group.getMembers()) {
-                if (!member.equals(message.getSender())) {
-                    deliverToUser(member, message);
-                }
+public void routeGroup(Message message) {
+    String groupName = message.getRecipient();
+    com.habeshagram.common.model.Group group = groupDAO.getGroup(groupName);
+    
+    if (group != null) {
+        for (String member : group.getMembers()) {
+            // Send to all group members except sender
+            if (!member.equals(message.getSender())) {
+                deliverToUser(member, message);
             }
-            
-            // Deliver to sender as confirmation
-            deliverToUser(message.getSender(), message);
         }
+        
+        // Deliver to sender as confirmation (they're already a member)
+        deliverToUser(message.getSender(), message);
     }
+}
     
     private void deliverToUser(String username, Message message) {
         IClientCallback client = clientRegistry.getClient(username);

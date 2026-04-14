@@ -2,7 +2,7 @@ package com.habeshagram.client.ui;
 
 import com.habeshagram.client.core.ChatClient;
 import com.habeshagram.client.ui.components.MessageBubble;
-import com.habeshagram.common.model.Message;
+import com.habeshagram.common.model.*;
 
 import javax.swing.*;
 import java.awt.*;
@@ -13,18 +13,17 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
 import javax.swing.SwingConstants;
-import com.habeshagram.common.model.MessageType;
 
 public class PrivateChatFrame extends JFrame {
     private ChatClient client;
     private String recipient;
-    private JTextArea messageArea;
     private JTextField inputField;
     private JPanel messagesPanel;
     private JScrollPane scrollPane;
     private Set<String> displayedMessageIds = new HashSet<>();
     private static final int HISTORY_LIMIT = 50;
     private JLabel placeholderLabel;
+    private JLabel offlineNotification;
     
     public PrivateChatFrame(ChatClient client, String recipient) {
         this.client = client;
@@ -32,6 +31,7 @@ public class PrivateChatFrame extends JFrame {
         
         initializeUI();
         setupCallback();
+        startStatusChecker();
     }
     
     private void initializeUI() {
@@ -39,11 +39,26 @@ public class PrivateChatFrame extends JFrame {
         setSize(400, 500);
         
         JPanel mainPanel = new JPanel(new BorderLayout());
+
+        offlineNotification = new JLabel("User is currently offline. Messages will be delivered when they come online.");
+        offlineNotification.setHorizontalAlignment(SwingConstants.CENTER);
+        offlineNotification.setBackground(new Color(255, 255, 200));
+        offlineNotification.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+        updateOfflineNotification();
+
+        mainPanel.add(offlineNotification, BorderLayout.NORTH);
         
         // Messages area
         messagesPanel = new JPanel();
         messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
         messagesPanel.setBackground(Color.WHITE);
+        
+        // Add placeholder
+        placeholderLabel = new JLabel("No messages yet. Say hello!");
+        placeholderLabel.setForeground(Color.GRAY);
+        placeholderLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        placeholderLabel.setVisible(false);
+        messagesPanel.add(placeholderLabel);
         
         scrollPane = new JScrollPane(messagesPanel);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -63,15 +78,6 @@ public class PrivateChatFrame extends JFrame {
         
         mainPanel.add(scrollPane, BorderLayout.CENTER);
         mainPanel.add(inputPanel, BorderLayout.SOUTH);
-        messagesPanel = new JPanel();
-        messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
-        messagesPanel.setBackground(Color.WHITE);
-
-        placeholderLabel = new JLabel("No messages yet. say hello!");
-        placeholderLabel.setForeground(Color.GRAY);
-        placeholderLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        placeholderLabel.setVisible(false);
-        messagesPanel.add(placeholderLabel);
         
         add(mainPanel);
         
@@ -86,38 +92,67 @@ public class PrivateChatFrame extends JFrame {
     }
     
     private void setupCallback() {
-    client.getCallbackImpl().addMessageListener(message -> {
-        if (message.getType() == MessageType.PRIVATE &&
-            (message.getSender().equals(recipient) || 
-             (message.getRecipient() != null && message.getRecipient().equals(recipient)))) {
-            SwingUtilities.invokeLater(() -> {
-                if (!displayedMessageIds.contains(message.getId())) {
-                    displayedMessageIds.add(message.getId());
-                    addMessageToUI(message);
-                }
-            });
-        }
-    });
-    
-    // Load history after window is visible
-    SwingUtilities.invokeLater(() -> {
-        loadConversationHistory();
-    });
+        client.getCallbackImpl().addMessageListener(message -> {
+            if (message.getType() == MessageType.PRIVATE &&
+                (message.getSender().equals(recipient) || 
+                 (message.getRecipient() != null && message.getRecipient().equals(recipient)))) {
+                SwingUtilities.invokeLater(() -> {
+                    if (!displayedMessageIds.contains(message.getId())) {
+                        displayedMessageIds.add(message.getId());
+                        addMessageToUI(message);
+                    }
+                });
+            }
+        });
+        
+        // Load history after window is visible
+        SwingUtilities.invokeLater(() -> {
+            loadConversationHistory();
+        });
     }
     
-    private void addMessage(Message message) {
+    private void loadConversationHistory() {
+        try {
+            List<Message> history = client.getPrivateHistory(
+                client.getUsername(), 
+                recipient, 
+                HISTORY_LIMIT
+            );
+            
+            for (Message msg : history) {
+                if (!displayedMessageIds.contains(msg.getId())) {
+                    displayedMessageIds.add(msg.getId());
+                    addMessageToUI(msg);
+                }
+            }
+            
+            updatePlaceholder();
+            
+        } catch (RemoteException e) {
+            System.err.println("Failed to load conversation history: " + e.getMessage());
+        }
+    }
+    
+    private void addMessageToUI(Message message) {
+        placeholderLabel.setVisible(false);
+        
         boolean isOwnMessage = message.getSender().equals(client.getUsername());
         MessageBubble bubble = new MessageBubble(message, isOwnMessage);
         
-        messagesPanel.add(bubble);
+        messagesPanel.add(bubble); // Add at the top for proper ordering? No, let's add at bottom
         messagesPanel.add(Box.createVerticalStrut(5));
         messagesPanel.revalidate();
+        messagesPanel.repaint();
         
-        // Auto-scroll
+        // Auto-scroll to bottom
         SwingUtilities.invokeLater(() -> {
             JScrollBar vertical = scrollPane.getVerticalScrollBar();
             vertical.setValue(vertical.getMaximum());
         });
+    }
+    
+    private void updatePlaceholder() {
+        placeholderLabel.setVisible(displayedMessageIds.isEmpty());
     }
     
     private void sendMessage() {
@@ -134,52 +169,33 @@ public class PrivateChatFrame extends JFrame {
         }
     }
 
-    private void loadConversationHistory() {
-        try {
-            List<Message> history = client.getPrivateHistory(
-                client.getUsername(), 
-                recipient, 
-                HISTORY_LIMIT
-            );
-            
-            for (Message msg : history) {
-                if (!displayedMessageIds.contains(msg.getId())) {
-                    displayedMessageIds.add(msg.getId());
-                    addMessage(msg);
+    private void updateOfflineNotification() {
+    try {
+        List<User> users = client.getAllUsers();
+        for (User user : users) {
+            if (user.getUsername().equals(recipient)) {
+                if (user.getStatus() != UserStatus.ONLINE) {
+                    offlineNotification.setText("⚠️ " + recipient + " is offline. Messages will be delivered when they come online.");
+                    offlineNotification.setVisible(true);
+                } else {
+                    offlineNotification.setVisible(false);
                 }
+                break;
             }
-            
-            // Update placeholder visibility
-            updatePlaceholder();
-            
-        } catch (RemoteException e) {
-            System.err.println("Failed to load conversation history: " + e.getMessage());
         }
+    } catch (RemoteException e) {
+        // Ignore
     }
+}
 
-    private void addMessageToUI(Message message) {
-    placeholderLabel.setVisible(false);
-    
-    boolean isOwnMessage = message.getSender().equals(client.getUsername());
-    MessageBubble bubble = new MessageBubble(message, isOwnMessage);
-    
-    messagesPanel.add(bubble);
-    messagesPanel.add(Box.createVerticalStrut(5));
-    messagesPanel.revalidate();
-    messagesPanel.repaint();
-    
-    // Auto-scroll
-    SwingUtilities.invokeLater(() -> {
-        JScrollBar vertical = scrollPane.getVerticalScrollBar();
-        vertical.setValue(vertical.getMaximum());
+private void startStatusChecker() {
+    Timer statusTimer = new Timer(5000, e -> {
+        updateOfflineNotification();
     });
+    statusTimer.start();
 }
 
-// Update placeholder visibility
-private void updatePlaceholder() {
-    placeholderLabel.setVisible(displayedMessageIds.isEmpty());
-}
 
-    
-}
 
+
+}

@@ -3,6 +3,7 @@ package com.habeshagram.server.persistence;
 import com.habeshagram.common.model.User;
 import java.sql.*;
 import java.time.LocalDateTime;
+import java.util.*;
 
 public class UserDAO {
     
@@ -80,4 +81,29 @@ public class UserDAO {
             System.err.println("Error updating last seen: " + e.getMessage());
         }
     }
+
+
+public List<User> getAllUsers() {
+    List<User> users = new ArrayList<>();
+    String sql = "SELECT * FROM users ORDER BY username";
+    
+    try (Connection conn = DatabaseManager.getInstance().getConnection();
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+        
+        while (rs.next()) {
+            User user = new User();
+            user.setUsername(rs.getString("username"));
+            user.setPasswordHash(rs.getString("password_hash"));
+            user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+            user.setLastSeen(rs.getTimestamp("last_seen").toLocalDateTime());
+            users.add(user);
+        }
+        
+    } catch (SQLException e) {
+        System.err.println("Error getting all users: " + e.getMessage());
+    }
+    
+    return users;
+}
 }

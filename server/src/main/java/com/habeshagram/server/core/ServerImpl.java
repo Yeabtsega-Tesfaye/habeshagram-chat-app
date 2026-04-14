@@ -12,6 +12,7 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.List;
 import java.util.Set;
+import java.util.ArrayList;
 
 public class ServerImpl implements IServer {
     private final ClientRegistry clientRegistry;
@@ -98,33 +99,95 @@ public class ServerImpl implements IServer {
         System.out.println("User logged out: " + username);
     }
     
-    @Override
-    public void sendBroadcast(String sender, String content) throws RemoteException {
-        Message message = new Message(MessageType.BROADCAST, sender, content);
-        messageRouter.routeBroadcast(message);
-        messageDAO.saveMessage(message);
-    }
+@Override
+public void sendBroadcast(String sender, String content) throws RemoteException {
+    Message message = new Message(MessageType.BROADCAST, sender, content);
     
-    @Override
-    public void sendPrivate(String sender, String recipient, String content) 
-            throws RemoteException {
-        Message message = new Message(MessageType.PRIVATE, sender, recipient, content);
-        
-        if (clientRegistry.isOnline(recipient)) {
-            messageRouter.routePrivate(message);
+    // Deliver to all online users (including sender)
+    Set<String> onlineUsers = clientRegistry.getOnlineUsers();
+    for (String username : onlineUsers) {
+        IClientCallback callback = clientRegistry.getClient(username);
+        if (callback != null) {
+            try {
+                callback.receiveMessage(message);
+            } catch (RemoteException e) {
+                System.err.println("Failed to deliver broadcast to " + username + ": " + e.getMessage());
+            }
         }
-        
-        // Save message for both sender and recipient
-        messageDAO.saveMessage(message);
     }
     
+    // Save to database for offline users
+    messageDAO.saveMessage(message);
+}
+
     @Override
-    public void sendGroup(String sender, String groupName, String content) 
-            throws RemoteException {
-        Message message = new Message(MessageType.GROUP, sender, groupName, content);
-        messageRouter.routeGroup(message);
-        messageDAO.saveMessage(message);
+public void sendPrivate(String sender, String recipient, String content) throws RemoteException {
+    Message message = new Message(MessageType.PRIVATE, sender, recipient, content);
+    
+    // Always route to sender (so they see their own message)
+    IClientCallback senderCallback = clientRegistry.getClient(sender);
+    if (senderCallback != null) {
+        try {
+            senderCallback.receiveMessage(message);
+        } catch (RemoteException e) {
+            System.err.println("Failed to deliver to sender: " + e.getMessage());
+        }
     }
+    
+    // Route to recipient if online
+    if (clientRegistry.isOnline(recipient)) {
+        IClientCallback recipientCallback = clientRegistry.getClient(recipient);
+        if (recipientCallback != null) {
+            try {
+                recipientCallback.receiveMessage(message);
+            } catch (RemoteException e) {
+                System.err.println("Failed to deliver to recipient: " + e.getMessage());
+            }
+        }
+    }
+    
+    // Always save to database
+    messageDAO.saveMessage(message);
+}
+    
+@Override
+public void sendGroup(String sender, String groupName, String content) throws RemoteException {
+    // Verify sender is a member of the group
+    Group group = groupDAO.getGroup(groupName);
+    if (group == null || !group.hasMember(sender)) {
+        System.err.println("User " + sender + " attempted to send message to group " + groupName + " but is not a member");
+        return;
+    }
+    
+    Message message = new Message(MessageType.GROUP, sender, groupName, content);
+    
+    // Always deliver to sender first (so they see their own message immediately)
+    IClientCallback senderCallback = clientRegistry.getClient(sender);
+    if (senderCallback != null) {
+        try {
+            senderCallback.receiveMessage(message);
+        } catch (RemoteException e) {
+            System.err.println("Failed to deliver to sender: " + e.getMessage());
+        }
+    }
+    
+    // Route to all online group members (except sender, already got it)
+    for (String member : group.getMembers()) {
+        if (!member.equals(sender) && clientRegistry.isOnline(member)) {
+            IClientCallback memberCallback = clientRegistry.getClient(member);
+            if (memberCallback != null) {
+                try {
+                    memberCallback.receiveMessage(message);
+                } catch (RemoteException e) {
+                    System.err.println("Failed to deliver to group member " + member + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+    // Save to database for offline members
+    messageDAO.saveMessage(message);
+}
     
     @Override
     public void createGroup(String creator, String groupName) throws RemoteException {
@@ -203,7 +266,31 @@ public List<Message> getPrivateHistory(String user1, String user2, int limit) th
 }
 
 @Override
-public List<Message> getGroupHistory(String groupName, int limit) throws RemoteException {
+public List<Message> getGroupHistory(String username, String groupName, int limit) throws RemoteException {
+    // Verify user is a member of the group
+    Group group = groupDAO.getGroup(groupName);
+    if (group == null || !group.hasMember(username)) {
+        System.err.println("User " + username + " attempted to access group history for " + groupName + " but is not a member");
+        return new ArrayList<>(); // Return empty list
+    }
+    
     return messageDAO.getGroupConversation(groupName, limit);
+}
+
+
+@Override
+public List<User> getAllUsers() throws RemoteException {
+    List<User> allUsers = userDAO.getAllUsers();
+    
+    // Update status for each user
+    for (User user : allUsers) {
+        if (clientRegistry.isOnline(user.getUsername())) {
+            user.setStatus(UserStatus.ONLINE);
+        } else {
+            user.setStatus(UserStatus.OFFLINE);
+        }
+    }
+    
+    return allUsers;
 }
 }

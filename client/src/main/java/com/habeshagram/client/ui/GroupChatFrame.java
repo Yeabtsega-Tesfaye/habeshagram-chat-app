@@ -148,7 +148,7 @@ private void initializeUI() {
 
 private void loadGroupHistory() {
     try {
-        List<Message> history = client.getGroupHistory(groupName, HISTORY_LIMIT);
+        List<Message> history = client.getGroupHistory(client.getUsername(), groupName, HISTORY_LIMIT);
         
         for (Message msg : history) {
             if (!displayedMessageIds.contains(msg.getId())) {

@@ -1,8 +1,7 @@
 package com.habeshagram.client.core;
 
 import com.habeshagram.common.exception.*;
-import com.habeshagram.common.model.Group;
-import com.habeshagram.common.model.Message;
+import com.habeshagram.common.model.*;
 import com.habeshagram.common.remote.*;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -89,10 +88,14 @@ public class ChatClient {
         return server.getPrivateHistory(user1, user2, limit);
     }
     
-    public List<Message> getGroupHistory(String groupName, int limit) throws RemoteException {
-        return server.getGroupHistory(groupName, limit);
+   public List<Message> getGroupHistory(String username, String groupName, int limit) throws RemoteException {
+    return server.getGroupHistory(username, groupName, limit);
     }
     
     public String getUsername() { return username; }
     public ClientCallbackImpl getCallbackImpl() { return callbackImpl; }
+
+    public List<User> getAllUsers() throws RemoteException {
+    return server.getAllUsers();
+}
 }

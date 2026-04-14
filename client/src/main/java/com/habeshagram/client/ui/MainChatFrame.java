@@ -4,8 +4,7 @@ import com.habeshagram.client.core.ChatClient;
 import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.OnlineUserPanel;
 import com.habeshagram.client.util.SwingUtils;
-import com.habeshagram.common.model.Message;
-import com.habeshagram.common.model.MessageType;
+import com.habeshagram.common.model.*;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
@@ -213,22 +212,33 @@ private static final int HISTORY_LIMIT = 50;
         }
     }
     
-    private void openPrivateChat() {
-        String selectedUser = onlineUserPanel.getSelectedUser();
-        if (selectedUser != null && !selectedUser.equals(client.getUsername())) {
-            PrivateChatFrame chatFrame = privateChats.get(selectedUser);
-            if (chatFrame == null) {
-                chatFrame = new PrivateChatFrame(client, selectedUser);
-                privateChats.put(selectedUser, chatFrame);
-            }
-            chatFrame.setVisible(true);
+private void openPrivateChat() {
+    String selectedUser = onlineUserPanel.getSelectedUser();
+    if (selectedUser != null && !selectedUser.equals(client.getUsername())) {
+        PrivateChatFrame chatFrame = privateChats.get(selectedUser);
+        if (chatFrame == null) {
+            chatFrame = new PrivateChatFrame(client, selectedUser);
+            privateChats.put(selectedUser, chatFrame);
         }
-    }
-    
-    private void openGroupChat(String groupName) {
-        GroupChatFrame chatFrame = new GroupChatFrame(client, groupName);
         chatFrame.setVisible(true);
     }
+}
+    
+private void openGroupChat(String groupName) {
+    try {
+        // Check if user is a member
+        List<String> members = client.getGroupMembers(groupName);
+        if (members.contains(client.getUsername())) {
+            GroupChatFrame chatFrame = new GroupChatFrame(client, groupName);
+            chatFrame.setVisible(true);
+        } else {
+            SwingUtils.showError(this, "Access Denied", 
+                "You are not a member of this group. Please join the group first.");
+        }
+    } catch (Exception e) {
+        SwingUtils.showError(this, "Error", "Failed to open group: " + e.getMessage());
+    }
+}
     
     private void createGroup() {
         String groupName = SwingUtils.showInput(this, "Create Group", "Enter group name:");
@@ -254,18 +264,19 @@ private static final int HISTORY_LIMIT = 50;
         }
     }
     
-    private void startRefreshTimer() {
-        refreshTimer = new Timer(3000, e -> {
-            try {
-                java.util.List<String> onlineUsers = client.getOnlineUsers();
-                SwingUtilities.invokeLater(() -> onlineUserPanel.updateUsers(onlineUsers));
-            } catch (RemoteException ex) {
-                // Connection might be lost
-                refreshTimer.stop();
-            }
-        });
-        refreshTimer.start();
-    }
+private void startRefreshTimer() {
+    refreshTimer = new Timer(3000, e -> {
+        try {
+            // Get all users (both online and offline)
+            List<User> allUsers = client.getAllUsers();
+            SwingUtilities.invokeLater(() -> onlineUserPanel.updateUsers(allUsers));
+        } catch (RemoteException ex) {
+            // Connection might be lost
+            refreshTimer.stop();
+        }
+    });
+    refreshTimer.start();
+}
     
     private void handleLogout() {
         refreshTimer.stop();

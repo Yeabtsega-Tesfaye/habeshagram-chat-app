@@ -3,6 +3,8 @@ package com.habeshagram.common.remote;
 import com.habeshagram.common.exception.*;
 import com.habeshagram.common.model.Group;
 import com.habeshagram.common.model.Message;
+import com.habeshagram.common.model.User;
+
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
@@ -42,6 +44,10 @@ public interface IServer extends Remote {
     List<Message> getRecentMessages(String username, int limit) throws RemoteException;
     
     List<Message> getPrivateHistory(String user1, String user2, int limit) throws RemoteException;
-    
-    List<Message> getGroupHistory(String groupName, int limit) throws RemoteException;
+
+        List<Message> getGroupHistory(String username, String groupName, int limit) throws RemoteException;
+
+List<User> getAllUsers() throws RemoteException;
+
+
 }
