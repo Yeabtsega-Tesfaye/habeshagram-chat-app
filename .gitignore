@@ -1,0 +1,108 @@
+# Compiled class files
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven target directories
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Database files (SQLite)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Log files
+*.log
+logs/
+*.log.*
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# OS generated files
+.directory
+.Trashes
+
+# Java Runtime Environment
+jre/
+
+# Maven local repository (if you have one locally)
+.m2/
+
+# Application specific
+habeshagram.db
+server/habeshagram.db
+*.pid
+*.seed
+*.pid.lock
+
+# Credentials and sensitive data
+*.pem
+*.p12
+*.pfx
+secrets.properties
+application-secrets.properties
+config/credentials.yml
+
+# Test output
+test-output/
+surefire-reports/
+failsafe-reports/
+
+# Dependency directories
+node_modules/
+lib/
+vendor/
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Documentation build
+docs/_build/
+site/
+
+# Environment files (if you have any)
+.env
+.env.local
+.env.*.local
+
+# IDE run configurations
+.run/
