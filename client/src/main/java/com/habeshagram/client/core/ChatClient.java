@@ -107,4 +107,12 @@ public void leaveGroup(String username, String groupName)
 public void sendTypingIndicator(String username, String recipient) throws RemoteException {
     server.sendTypingIndicator(username, recipient);
 }
+
+public void sendGroupTypingIndicator(String username, String groupName) throws RemoteException {
+    server.sendGroupTypingIndicator(username, groupName);
+}
+
+public void sendBroadcastTypingIndicator(String username) throws RemoteException {
+    server.sendBroadcastTypingIndicator(username);
+}
 }

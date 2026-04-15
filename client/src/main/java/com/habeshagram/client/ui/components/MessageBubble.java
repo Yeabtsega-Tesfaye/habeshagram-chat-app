@@ -1,14 +1,25 @@
 package com.habeshagram.client.ui.components;
 
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.geom.RoundRectangle2D;
+import java.time.format.DateTimeFormatter;
+
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.border.EmptyBorder;
+
 import com.habeshagram.client.ui.theme.ModernTheme;
 import com.habeshagram.common.model.Message;
 import com.habeshagram.common.model.MessageType;
-
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import java.awt.*;
-import java.awt.geom.RoundRectangle2D;
-import java.time.format.DateTimeFormatter;
 
 public class MessageBubble extends JPanel {
     private static final int MAX_BUBBLE_WIDTH = 400;
@@ -50,6 +61,10 @@ public class MessageBubble extends JPanel {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 
+                g2.setColor(new Color(0, 0, 0, 20));
+                g2.fill(new RoundRectangle2D.Double(2, 2, getWidth() - 1, getHeight() - 1, 12, 12));
+
+
                 Color bgColor = getBubbleColor(message, isOwnMessage);
                 g2.setColor(bgColor);
                 g2.fill(new RoundRectangle2D.Double(0, 0, getWidth() - 1, getHeight() - 1, 12, 12));
@@ -63,7 +78,7 @@ public class MessageBubble extends JPanel {
         
         // Header (only for group/private messages)
         if (message.getType() != MessageType.SYSTEM && !isOwnMessage) {
-            JPanel headerPanel = createHeader(message);
+            JPanel headerPanel = createHeader(message, isOwnMessage);
             panel.add(headerPanel);
             panel.add(Box.createVerticalStrut(4));
         }
@@ -97,22 +112,43 @@ public class MessageBubble extends JPanel {
         }
     }
     
-    private JPanel createHeader(Message message) {
-        JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        header.setOpaque(false);
-        
-        String headerText = message.getSender();
-        if (message.getType() == MessageType.GROUP) {
-            headerText += " • " + message.getRecipient();
-        }
-        
-        JLabel nameLabel = new JLabel(headerText);
-        nameLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(Font.BOLD));
-        nameLabel.setForeground(ModernTheme.ACCENT_BLUE);
-        header.add(nameLabel);
-        
-        return header;
+private JPanel createHeader(Message message, boolean isOwnMessage) {
+    JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+    header.setOpaque(false);
+    
+    // Sender name
+    JLabel nameLabel = new JLabel(message.getSender());
+    nameLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(Font.BOLD));
+    nameLabel.setForeground(ModernTheme.ACCENT_BLUE);
+    header.add(nameLabel);
+    
+    // Icon indicators
+    if (message.getType() == MessageType.PRIVATE) {
+        JLabel privateIcon = new JLabel("🔒");
+        privateIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+        privateIcon.setToolTipText("Private Message");
+        header.add(privateIcon);
+    } else if (message.getType() == MessageType.GROUP) {
+        JLabel groupIcon = new JLabel("👥");
+        groupIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+        groupIcon.setToolTipText("Group: " + message.getRecipient());
+        header.add(groupIcon);
     }
+    
+    // Separator dot
+    JLabel dotLabel = new JLabel("•");
+    dotLabel.setFont(ModernTheme.FONT_SMALL);
+    dotLabel.setForeground(ModernTheme.TEXT_MUTED);
+    header.add(dotLabel);
+    
+    // Time
+    JLabel timeLabel = new JLabel(message.getFormattedTime());
+    timeLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(10f));
+    timeLabel.setForeground(ModernTheme.TEXT_MUTED);
+    header.add(timeLabel);
+    
+    return header;
+}
     
     private JPanel createFooter(Message message, boolean isOwnMessage) {
         JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));

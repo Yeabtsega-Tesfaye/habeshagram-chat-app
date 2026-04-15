@@ -54,4 +54,10 @@ void leaveGroup(String username, String groupName) throws RemoteException, Group
 
 // Add method:
 void sendTypingIndicator(String username, String recipient) throws RemoteException;
+
+void sendGroupTypingIndicator(String username, String groupName) throws RemoteException;
+
+// Add method for broadcast typing
+void sendBroadcastTypingIndicator(String username) throws RemoteException;
+
 }

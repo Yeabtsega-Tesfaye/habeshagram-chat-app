@@ -1,24 +1,46 @@
 package com.habeshagram.client.ui;
 
-import com.habeshagram.client.core.ChatClient;
-import com.habeshagram.client.ui.components.MessageBubble;
-import com.habeshagram.common.exception.GroupNotFoundException;
-import com.habeshagram.common.model.Message;
-
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.ScrollPane;
+import java.awt.Toolkit;
+import java.awt.event.*;
+import java.awt.geom.RoundRectangle2D;
 import java.rmi.RemoteException;
-import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
-import javax.swing.SwingConstants;
-import com.habeshagram.common.model.MessageType;
+import java.util.Set;
 
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
+import com.habeshagram.client.core.ChatClient;
+import com.habeshagram.client.ui.components.EmojiPicker;
+import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.ModernButton;
 import com.habeshagram.client.ui.theme.ModernTheme;
-import java.awt.geom.RoundRectangle2D;
+import com.habeshagram.client.util.SoundManager;
+import com.habeshagram.common.exception.GroupNotFoundException;
+import com.habeshagram.common.model.Message;
+import com.habeshagram.common.model.MessageType;
 
 public class GroupChatFrame extends JFrame {
     private ChatClient client;
@@ -32,6 +54,9 @@ public class GroupChatFrame extends JFrame {
     private JLabel placeholderLabel;
     private int unreadCount = 0;
     private boolean hasFocus = false;
+    private JLabel typingLabel;
+    private Timer typingTimer;
+    private boolean isTyping = false;
     
     public GroupChatFrame(ChatClient client, String groupName) {
         this.client = client;
@@ -62,9 +87,11 @@ private void initializeUI() {
     setSize(900, 900);
     
     JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    splitPane.setDividerSize(1);
     
     // Messages area
     JPanel chatPanel = new JPanel(new BorderLayout());
+    chatPanel.setBackground(ModernTheme.BACKGROUND_DARK);
 
     JPanel headerPanel = createHeaderPanel();
     chatPanel.add(headerPanel, BorderLayout.NORTH);
@@ -87,6 +114,16 @@ private void initializeUI() {
     
     scrollPane = new JScrollPane(messagesPanel);
     scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+    scrollPane.setBorder(null);
+    scrollPane.getViewport().setBackground(ModernTheme.BACKGROUND_CHAT);
+
+
+        typingLabel = new JLabel(" ");
+        typingLabel.setFont(ModernTheme.FONT_SMALL);
+        typingLabel.setForeground(ModernTheme.TEXT_MUTED);
+        typingLabel.setBorder(BorderFactory.createEmptyBorder(4, 16, 2, 16));
+        typingLabel.setBackground(ModernTheme.BACKGROUND_DARK);
+        typingLabel.setOpaque(true);
     
     // Input area
     JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
@@ -110,24 +147,76 @@ private void initializeUI() {
     inputField.setFont(ModernTheme.FONT_BODY);
     inputField.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
     inputField.addActionListener(e -> sendMessage());
-   
+
+    inputField.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (!isTyping) {
+                isTyping = true;
+                try {
+                    client.sendGroupTypingIndicator(client.getUsername(), groupName);
+                } catch (RemoteException ex) {
+                    // Ignore
+                }
+                
+                // Reset typing flag after 1 second
+                new Timer(1000, evt -> isTyping = false).start();
+            }
+        }
+    });
+
+    
+
+    JPanel leftInputPanel = new JPanel(new BorderLayout(5, 0));
+    leftInputPanel.setOpaque(false);
+    
+    ModernButton emojiButton = new ModernButton("😊");
+    emojiButton.setPreferredSize(new Dimension(45, 40));
+    emojiButton.addActionListener(e -> {
+        EmojiPicker picker = new EmojiPicker(emoji -> {
+            inputField.setText(inputField.getText() + emoji);
+        });
+        picker.show(emojiButton, 0, -picker.getPreferredSize().height);
+    });
+    
+    leftInputPanel.add(emojiButton, BorderLayout.WEST);
+    leftInputPanel.add(inputField, BorderLayout.CENTER);
+    
     ModernButton sendButton = new ModernButton("Send");
     sendButton.setPreferredSize(new Dimension(80, 40));
     sendButton.addActionListener(e -> sendMessage());
     
-    inputPanel.add(inputField, BorderLayout.CENTER);
+    inputPanel.add(leftInputPanel, BorderLayout.CENTER);
     inputPanel.add(sendButton, BorderLayout.EAST);
     
+    // Bottom panel
+    JPanel bottomPanel = new JPanel(new BorderLayout());
+    bottomPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    bottomPanel.add(typingLabel, BorderLayout.NORTH);
+    bottomPanel.add(inputPanel, BorderLayout.CENTER);
+    
     chatPanel.add(scrollPane, BorderLayout.CENTER);
-    chatPanel.add(inputPanel, BorderLayout.SOUTH);
+    chatPanel.add(bottomPanel, BorderLayout.SOUTH);
     
     // Members area
-    JPanel membersPanel = new JPanel(new BorderLayout());
-    membersPanel.setBorder(BorderFactory.createTitledBorder("Members"));
+   JPanel membersPanel = new JPanel(new BorderLayout());
+    membersPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    membersPanel.setBorder(BorderFactory.createTitledBorder(
+        BorderFactory.createLineBorder(ModernTheme.BACKGROUND_LIGHT),
+        "Members",
+        javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+        javax.swing.border.TitledBorder.DEFAULT_POSITION,
+        ModernTheme.FONT_SMALL,
+        ModernTheme.TEXT_PRIMARY
+    ));
     
     membersArea = new JTextArea();
     membersArea.setEditable(false);
+    membersArea.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+    membersArea.setForeground(ModernTheme.TEXT_PRIMARY);
+    membersArea.setFont(ModernTheme.FONT_SMALL);
     JScrollPane membersScroll = new JScrollPane(membersArea);
+    membersScroll.setBorder(null);
     membersPanel.add(membersScroll, BorderLayout.CENTER);
     
     splitPane.setLeftComponent(chatPanel);
@@ -175,29 +264,39 @@ private JPanel createHeaderPanel() {
     return header;
 }
     
-    private void setupCallback() {
+private void setupCallback() {
     client.getCallbackImpl().addMessageListener(message -> {
-        if (message.getType() == MessageType.GROUP &&
-            groupName.equals(message.getRecipient())) {
+        if (message.getType() == MessageType.GROUP && groupName.equals(message.getRecipient())) {
             SwingUtilities.invokeLater(() -> {
                 if (!displayedMessageIds.contains(message.getId())) {
                     displayedMessageIds.add(message.getId());
                     addMessageToUI(message);
-
-                    if (!hasFocus && !message.getSender().equals(client.getUsername())) {
-                        unreadCount++;
-                        updateTitle();
+                    
+                    if (!message.getSender().equals(client.getUsername())) {
+                        SoundManager.playMessageSound();
                     }
                 }
             });
-
-            if(!hasFocus && !message.getSender().equals(client.getUsername())) {
-                playNotificationSound();
-            }
         }
     });
     
-    // Load history after window is visible
+    // Typing listener for group
+    client.getCallbackImpl().addTypingListener((username) -> {
+        // Check if typing is for this group (you may need to track which group)
+        SwingUtilities.invokeLater(() -> {
+            if (!username.equals(client.getUsername())) {
+                typingLabel.setText(username + " is typing...");
+                
+                if (typingTimer != null) {
+                    typingTimer.stop();
+                }
+                typingTimer = new Timer(2000, e -> typingLabel.setText(" "));
+                typingTimer.setRepeats(false);
+                typingTimer.start();
+            }
+        });
+    });
+    
     SwingUtilities.invokeLater(() -> {
         loadGroupHistory();
     });
@@ -278,10 +377,5 @@ private void addMessageToUI(Message message) {
 private void updatePlaceholder() {
     placeholderLabel.setVisible(displayedMessageIds.isEmpty());
 }
-
-private void playNotificationSound() {
-    Toolkit.getDefaultToolkit().beep();
-}
-
 
 }

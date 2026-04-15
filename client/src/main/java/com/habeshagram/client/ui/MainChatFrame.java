@@ -1,6 +1,7 @@
 package com.habeshagram.client.ui;
 
 import com.habeshagram.client.core.ChatClient;
+import com.habeshagram.client.ui.components.EmojiPicker;
 import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.OnlineUserPanel;
 import com.habeshagram.client.util.SwingUtils;
@@ -11,7 +12,6 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
 import java.util.ArrayList;
-import javax.swing.SwingConstants;
 import java.awt.geom.RoundRectangle2D;
 import com.habeshagram.client.ui.components.ModernButton;
 import com.habeshagram.client.util.SoundManager;
@@ -25,7 +25,6 @@ import java.util.Map;
 
 public class MainChatFrame extends JFrame {
     private ChatClient client;
-    private JTextArea messageArea;
     private JTextField inputField;
     private JButton sendButton;
     private OnlineUserPanel onlineUserPanel;
@@ -33,13 +32,14 @@ public class MainChatFrame extends JFrame {
     private JScrollPane chatScrollPane;
     private Map<String, PrivateChatFrame> privateChats;
     private Set<String> displayedMessageIds = new HashSet<>();
-private static final int HISTORY_LIMIT = 50;
-private boolean hasFocus = false;
-
-
-
-    
+    private static final int HISTORY_LIMIT = 50;
+    private boolean hasFocus = false;
+    private JLabel typingLabel;
+    private Timer typingTimer;
+    private boolean isTyping = false;
+    private String currentTypingUser = null;
     private Timer refreshTimer;
+    private JLabel onlineCountLabel;
     
     public MainChatFrame(ChatClient client) {
         this.client = client;
@@ -51,34 +51,102 @@ private boolean hasFocus = false;
     }
     
     private void initializeUI() {
-        ModernTheme.applyTheme();
-        setTitle("Habeshagram - " + client.getUsername());
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 700);
-        getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
-        
-        // Main split pane
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        
-        // Left panel - Chat area
-        JPanel chatPanel = new JPanel(new BorderLayout());
-        
-        // Chat messages area
-        chatMessagesPanel = new JPanel();
-        chatMessagesPanel.setLayout(new BoxLayout(chatMessagesPanel, BoxLayout.Y_AXIS));
-        chatMessagesPanel.setBackground(ModernTheme.BACKGROUND_CHAT);
-        
-         // Placeholder for empty chat
-        
-        chatScrollPane = new JScrollPane(chatMessagesPanel);
-        chatScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        chatScrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        
-        // Input panel
-        JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
-        inputPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        
-inputField = new JTextField() {
+    ModernTheme.applyTheme();
+    setTitle("Habeshagram - " + client.getUsername());
+    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    setSize(1000, 700);
+    getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
+    
+    // Main split pane
+    JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    splitPane.setDividerSize(1);
+    
+    // Left panel - Chat area
+    JPanel chatPanel = new JPanel(new BorderLayout());
+    chatPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+
+    // Chat header
+// Chat header - MODERN CENTERED STYLE
+JPanel chatHeader = new JPanel();
+chatHeader.setLayout(new BoxLayout(chatHeader, BoxLayout.Y_AXIS));
+chatHeader.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+chatHeader.setBorder(BorderFactory.createEmptyBorder(16, 16, 12, 16));
+
+// Home icon and title
+JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+titlePanel.setOpaque(false);
+
+JLabel homeIcon = new JLabel("🏠");
+homeIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 24));
+titlePanel.add(homeIcon);
+
+JLabel chatTitle = new JLabel("Home");
+chatTitle.setFont(ModernTheme.FONT_TITLE);
+chatTitle.setForeground(ModernTheme.TEXT_PRIMARY);
+titlePanel.add(chatTitle);
+
+// Welcome message
+JPanel welcomePanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+welcomePanel.setOpaque(false);
+
+JLabel welcomeLabel = new JLabel("Welcome back, " + client.getUsername() + "!");
+welcomeLabel.setFont(ModernTheme.FONT_BODY);
+welcomeLabel.setForeground(ModernTheme.TEXT_SECONDARY);
+welcomePanel.add(welcomeLabel);
+
+// Online count
+JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+statusPanel.setOpaque(false);
+
+JLabel onlineIcon = new JLabel("🟢");
+onlineIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 12));
+statusPanel.add(onlineIcon);
+
+JLabel onlineCountLabel = new JLabel("0 online now");
+onlineCountLabel.setFont(ModernTheme.FONT_SMALL);
+onlineCountLabel.setForeground(ModernTheme.ONLINE);
+onlineCountLabel.setName("onlineCountLabel"); // For updating later
+statusPanel.add(onlineCountLabel);
+
+chatHeader.add(titlePanel);
+chatHeader.add(Box.createVerticalStrut(4));
+chatHeader.add(welcomePanel);
+chatHeader.add(Box.createVerticalStrut(4));
+chatHeader.add(statusPanel);
+
+// Add a subtle separator line
+JSeparator separator = new JSeparator();
+separator.setForeground(ModernTheme.BACKGROUND_LIGHT);
+chatHeader.add(separator);
+
+chatPanel.add(chatHeader, BorderLayout.NORTH);
+    
+    // Chat messages area
+    chatMessagesPanel = new JPanel();
+    chatMessagesPanel.setLayout(new BoxLayout(chatMessagesPanel, BoxLayout.Y_AXIS));
+    chatMessagesPanel.setBackground(ModernTheme.BACKGROUND_CHAT);
+    chatMessagesPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+    
+    chatScrollPane = new JScrollPane(chatMessagesPanel);
+    chatScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+    chatScrollPane.setBorder(null);
+    chatScrollPane.getVerticalScrollBar().setUnitIncrement(16);
+    chatScrollPane.getViewport().setBackground(ModernTheme.BACKGROUND_CHAT);
+
+    // Typing label
+    typingLabel = new JLabel(" ");
+    typingLabel.setFont(ModernTheme.FONT_SMALL);
+    typingLabel.setForeground(ModernTheme.TEXT_MUTED);
+    typingLabel.setBorder(BorderFactory.createEmptyBorder(4, 16, 2, 16));
+    typingLabel.setBackground(ModernTheme.BACKGROUND_DARK);
+    typingLabel.setOpaque(true);
+    
+    // Input panel
+    JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
+    inputPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    inputPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+
+    inputField = new JTextField() {
         @Override
         protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
@@ -94,102 +162,186 @@ inputField = new JTextField() {
     inputField.setCaretColor(ModernTheme.TEXT_PRIMARY);
     inputField.setFont(ModernTheme.FONT_BODY);
     inputField.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
-    inputField.putClientProperty("JTextField.placeholderText", "Type a message...");
     
     inputField.addActionListener(e -> sendMessage());
-        
-        sendButton = new ModernButton("Send");
-        sendButton.setPreferredSize(new Dimension(80, 40));
-        sendButton.addActionListener(e -> sendMessage());
-        
-        inputPanel.add(inputField, BorderLayout.CENTER);
-        inputPanel.add(sendButton, BorderLayout.EAST);
-        
-        chatPanel.add(chatScrollPane, BorderLayout.CENTER);
-        chatPanel.add(inputPanel, BorderLayout.SOUTH);
-        
-        // Right panel - Online users and groups
-        JPanel rightPanel = new JPanel(new BorderLayout());
-        
-        onlineUserPanel = new OnlineUserPanel();
-        onlineUserPanel.addUserSelectionListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    openPrivateChat();
+
+    inputField.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (!isTyping) {
+                isTyping = true;
+                try {
+                    client.sendBroadcastTypingIndicator(client.getUsername());
+                } catch (RemoteException ex) {
+                    // Ignore
                 }
+                new Timer(1000, evt -> isTyping = false).start();
             }
+        }
+    });
+
+    JPanel leftInputPanel = new JPanel(new BorderLayout(5, 0));
+    leftInputPanel.setOpaque(false);
+    
+    ModernButton emojiButton = new ModernButton("😊");
+    emojiButton.setPreferredSize(new Dimension(45, 40));
+    emojiButton.addActionListener(e -> {
+        EmojiPicker picker = new EmojiPicker(emoji -> {
+            inputField.setText(inputField.getText() + emoji);
         });
-        
-        JPanel groupPanel = createGroupPanel();
-        
-        rightPanel.add(onlineUserPanel, BorderLayout.CENTER);
-        rightPanel.add(groupPanel, BorderLayout.SOUTH);
-        
-        splitPane.setLeftComponent(chatPanel);
-        splitPane.setRightComponent(rightPanel);
-        splitPane.setDividerLocation(650);
-        
-        add(splitPane);
-        
-        // Menu bar
-        setJMenuBar(createMenuBar());
-        
-        SwingUtils.centerOnScreen(this);
-        
-        // Window closing handler
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                handleLogout();
+        picker.show(emojiButton, 0, -picker.getPreferredSize().height);
+    });
+    
+    leftInputPanel.add(emojiButton, BorderLayout.WEST);
+    leftInputPanel.add(inputField, BorderLayout.CENTER);
+    
+    sendButton = new ModernButton("Send");
+    sendButton.setPreferredSize(new Dimension(80, 40));
+    sendButton.addActionListener(e -> sendMessage());
+    
+    inputPanel.add(leftInputPanel, BorderLayout.CENTER);
+    inputPanel.add(sendButton, BorderLayout.EAST);
+    
+    // Bottom panel with typing indicator
+    JPanel bottomPanel = new JPanel(new BorderLayout());
+    bottomPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    bottomPanel.add(typingLabel, BorderLayout.NORTH);
+    bottomPanel.add(inputPanel, BorderLayout.CENTER);
+    
+    chatPanel.add(chatHeader, BorderLayout.NORTH);
+    chatPanel.add(chatScrollPane, BorderLayout.CENTER);
+    chatPanel.add(bottomPanel, BorderLayout.SOUTH);
+    
+    // Right panel - Online users and groups
+    JPanel rightPanel = new JPanel(new BorderLayout());
+    rightPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    
+    onlineUserPanel = new OnlineUserPanel();
+    onlineUserPanel.addUserSelectionListener(new MouseAdapter() {
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            if (e.getClickCount() == 2) {
+                openPrivateChat();
             }
-        });
-    }
+        }
+    });
+    
+    JPanel groupPanel = createGroupPanel();
+    
+    rightPanel.add(onlineUserPanel, BorderLayout.CENTER);
+    rightPanel.add(groupPanel, BorderLayout.SOUTH);
+    
+    splitPane.setLeftComponent(chatPanel);
+    splitPane.setRightComponent(rightPanel);
+    splitPane.setDividerLocation(700);
+    
+    add(splitPane);
+    
+    // Menu bar
+    setJMenuBar(createMenuBar());
+    
+    setLocationRelativeTo(null);
+    
+    // Window closing handler
+    addWindowListener(new WindowAdapter() {
+        @Override
+        public void windowClosing(WindowEvent e) {
+            handleLogout();
+        }
+    });
+}
     
 private JMenuBar createMenuBar() {
     JMenuBar menuBar = new JMenuBar();
+    menuBar.setBackground(ModernTheme.BACKGROUND_DARK);
+    menuBar.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
     
-    JMenu fileMenu = new JMenu("File");
-    JMenuItem logoutItem = new JMenuItem("Logout");
+    // File Menu
+    JMenu fileMenu = createModernMenu("📁 File");
+    JMenuItem logoutItem = createModernMenuItem("🚪 Logout");
     logoutItem.addActionListener(e -> handleLogout());
-    JMenuItem exitItem = new JMenuItem("Exit");
+    JMenuItem exitItem = createModernMenuItem("❌ Exit");
     exitItem.addActionListener(e -> System.exit(0));
     
     fileMenu.add(logoutItem);
     fileMenu.addSeparator();
     fileMenu.add(exitItem);
     
-    JMenu groupMenu = new JMenu("Groups");
-    JMenuItem createGroupItem = new JMenuItem("Create Group");
+    // Groups Menu
+    JMenu groupMenu = createModernMenu("👥 Groups");
+    JMenuItem createGroupItem = createModernMenuItem("➕ Create Group");
     createGroupItem.addActionListener(e -> createGroup());
-    JMenuItem joinGroupItem = new JMenuItem("Join Group");
+    JMenuItem joinGroupItem = createModernMenuItem("🔗 Join Group");
     joinGroupItem.addActionListener(e -> joinGroup());
-    JMenuItem leaveGroupItem = new JMenuItem("Leave Group"); // NEW
+    JMenuItem leaveGroupItem = createModernMenuItem("🚪 Leave Group");
     leaveGroupItem.addActionListener(e -> leaveGroup());
     
     groupMenu.add(createGroupItem);
     groupMenu.add(joinGroupItem);
     groupMenu.addSeparator();
-    groupMenu.add(leaveGroupItem); // NEW
+    groupMenu.add(leaveGroupItem);
     
-    JMenu helpMenu = new JMenu("Help");
-    JMenuItem aboutItem = new JMenuItem("About");
+    // Settings Menu
+    JMenu settingsMenu = createModernMenu("⚙️ Settings");
+    JCheckBoxMenuItem soundItem = new JCheckBoxMenuItem("🔊 Sound Enabled", true);
+    soundItem.setFont(ModernTheme.FONT_BODY);
+    soundItem.addActionListener(e -> SoundManager.setEnabled(soundItem.isSelected()));
+    settingsMenu.add(soundItem);
+    
+    // Help Menu
+    JMenu helpMenu = createModernMenu("❓ Help");
+    JMenuItem aboutItem = createModernMenuItem("ℹ️ About");
     aboutItem.addActionListener(e -> showAbout());
-    
     helpMenu.add(aboutItem);
     
     menuBar.add(fileMenu);
     menuBar.add(groupMenu);
-    menuBar.add(helpMenu);
-
-    JMenu settingsMenu = new JMenu("Settings");
-    JCheckBoxMenuItem soundItem = new JCheckBoxMenuItem("Sound", true);
-    soundItem.addActionListener(e -> SoundManager.setEnabled(soundItem.isSelected()));
-    
-    settingsMenu.add(soundItem);
     menuBar.add(settingsMenu);
-
+    menuBar.add(helpMenu);
+    
     return menuBar;
+}
+
+private JMenu createModernMenu(String text) {
+    JMenu menu = new JMenu(text);
+    menu.setFont(ModernTheme.FONT_BODY);
+    menu.setForeground(ModernTheme.TEXT_PRIMARY);
+    menu.setOpaque(false);
+    
+    // Hover effect
+    menu.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            menu.setForeground(ModernTheme.PRIMARY);
+        }
+        
+        @Override
+        public void mouseExited(MouseEvent e) {
+            menu.setForeground(ModernTheme.TEXT_PRIMARY);
+        }
+    });
+    
+    return menu;
+}
+
+private JMenuItem createModernMenuItem(String text) {
+    JMenuItem item = new JMenuItem(text);
+    item.setFont(ModernTheme.FONT_BODY);
+    
+    // Hover effect
+    item.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            item.setBackground(ModernTheme.PRIMARY);
+        }
+        
+        @Override
+        public void mouseExited(MouseEvent e) {
+            item.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+        }
+    });
+    
+    return item;
 }
 
 // Add leave group method
@@ -362,11 +514,17 @@ private void openGroupChat(String groupName) {
 private void startRefreshTimer() {
     refreshTimer = new Timer(3000, e -> {
         try {
-            // Get all users (both online and offline)
             List<User> allUsers = client.getAllUsers();
-            SwingUtilities.invokeLater(() -> onlineUserPanel.updateUsers(allUsers));
+            SwingUtilities.invokeLater(() -> {
+                onlineUserPanel.updateUsers(allUsers);
+                
+                // Count online users
+                long onlineCount = allUsers.stream()
+                    .filter(u -> u.getStatus() == UserStatus.ONLINE)
+                    .count();
+                updateOnlineCount((int)onlineCount);
+            });
         } catch (RemoteException ex) {
-            // Connection might be lost
             refreshTimer.stop();
         }
     });
@@ -396,27 +554,41 @@ private void startRefreshTimer() {
             "Advanced Programming and Distributed Systems Project");
     }
 
-// Modify setupCallbacks() method
 private void setupCallbacks() {
+    // Message listener
     client.getCallbackImpl().addMessageListener(message -> {
         SwingUtilities.invokeLater(() -> {
-            // Prevent duplicates
             if (!displayedMessageIds.contains(message.getId())) {
                 displayedMessageIds.add(message.getId());
                 addMessageToChat(message);
-
-                if(!message.getSender().equals(client.getUsername())) {
+                
+                if (!message.getSender().equals(client.getUsername())) {
                     SoundManager.playMessageSound();
                 }
             }
         });
-
-        if(!hasFocus && !message.getSender().equals(client.getUsername())) {
-            playNotificationSound();
+    });
+    
+    // Typing listener
+    client.getCallbackImpl().addTypingListener(username -> {
+        if (username != null && !username.equals(client.getUsername())) {
+            SwingUtilities.invokeLater(() -> {
+                currentTypingUser = username;
+                typingLabel.setText(username + " is typing...");
+                
+                if (typingTimer != null) {
+                    typingTimer.stop();
+                }
+                typingTimer = new Timer(2000, e -> {
+                    typingLabel.setText(" ");
+                    currentTypingUser = null;
+                });
+                typingTimer.setRepeats(false);
+                typingTimer.start();
+            });
         }
     });
     
-    // Load message history after window is visible
     SwingUtilities.invokeLater(() -> {
         loadMessageHistory();
     });
@@ -451,7 +623,10 @@ private void showPlaceholder(String text) {
     chatMessagesPanel.revalidate();
 }
 
-private void playNotificationSound() {
-    SoundManager.playMessageSound();
+private void updateOnlineCount(int count) {
+    if (onlineCountLabel != null) {
+        onlineCountLabel.setText(count + " online now");
+    }
 }
+
 }
