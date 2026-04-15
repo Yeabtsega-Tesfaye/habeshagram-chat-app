@@ -98,4 +98,9 @@ public class ChatClient {
     public List<User> getAllUsers() throws RemoteException {
     return server.getAllUsers();
 }
+
+public void leaveGroup(String username, String groupName) 
+    throws RemoteException, GroupNotFoundException {
+    server.leaveGroup(username, groupName);
+}
 }

@@ -49,5 +49,7 @@ public interface IServer extends Remote {
 
 List<User> getAllUsers() throws RemoteException;
 
+// Add to IServer.java
+void leaveGroup(String username, String groupName) throws RemoteException, GroupNotFoundException;
 
 }

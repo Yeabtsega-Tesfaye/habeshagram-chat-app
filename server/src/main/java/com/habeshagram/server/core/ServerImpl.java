@@ -293,4 +293,38 @@ public List<User> getAllUsers() throws RemoteException {
     
     return allUsers;
 }
+
+@Override
+public void leaveGroup(String username, String groupName) throws RemoteException, GroupNotFoundException {
+    Group group = groupDAO.getGroup(groupName);
+    if (group == null) {
+        throw new GroupNotFoundException("Group not found: " + groupName);
+    }
+    
+    // Can't leave if you're the creator? (Optional: transfer ownership or delete group)
+    if (group.getCreator().equals(username)) {
+        // Option 1: Delete the group if creator leaves
+        groupDAO.deleteGroup(groupName);
+        broadcastSystemMessage("Group " + groupName + " has been deleted (creator left)");
+        System.out.println("Group " + groupName + " deleted because creator " + username + " left");
+    } else {
+        // Remove member
+        group.removeMember(username);
+        groupDAO.updateGroup(group);
+        
+        // Notify group members
+        notifyGroupMembers(groupName, username + " has left the group");
+        
+        // Send system message to the user who left
+        IClientCallback callback = clientRegistry.getClient(username);
+        if (callback != null) {
+            try {
+                Message msg = new Message(MessageType.SYSTEM, "System", "You have left group: " + groupName);
+                callback.receiveMessage(msg);
+            } catch (RemoteException e) {
+                // Ignore
+            }
+        }
+    }
+}
 }

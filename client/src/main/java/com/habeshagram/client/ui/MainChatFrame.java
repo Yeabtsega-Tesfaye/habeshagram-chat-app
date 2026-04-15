@@ -5,10 +5,15 @@ import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.OnlineUserPanel;
 import com.habeshagram.client.util.SwingUtils;
 import com.habeshagram.common.model.*;
+import com.habeshagram.common.exception.GroupNotFoundException;
+import com.habeshagram.client.ui.theme.ModernTheme;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ArrayList;
 import javax.swing.SwingConstants;
+import java.awt.geom.RoundRectangle2D;
+import com.habeshagram.client.ui.components.ModernButton;
 
 import javax.swing.*;
 import java.awt.*;
@@ -28,6 +33,7 @@ public class MainChatFrame extends JFrame {
     private Map<String, PrivateChatFrame> privateChats;
     private Set<String> displayedMessageIds = new HashSet<>();
 private static final int HISTORY_LIMIT = 50;
+private boolean hasFocus = false;
     
     private Timer refreshTimer;
     
@@ -41,9 +47,11 @@ private static final int HISTORY_LIMIT = 50;
     }
     
     private void initializeUI() {
+        ModernTheme.applyTheme();
         setTitle("Habeshagram - " + client.getUsername());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(800, 600);
+        setSize(1000, 700);
+        getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
         
         // Main split pane
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
@@ -54,7 +62,9 @@ private static final int HISTORY_LIMIT = 50;
         // Chat messages area
         chatMessagesPanel = new JPanel();
         chatMessagesPanel.setLayout(new BoxLayout(chatMessagesPanel, BoxLayout.Y_AXIS));
-        chatMessagesPanel.setBackground(Color.WHITE);
+        chatMessagesPanel.setBackground(ModernTheme.BACKGROUND_CHAT);
+        
+         // Placeholder for empty chat
         
         chatScrollPane = new JScrollPane(chatMessagesPanel);
         chatScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -64,10 +74,28 @@ private static final int HISTORY_LIMIT = 50;
         JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
         inputPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         
-        inputField = new JTextField();
-        inputField.addActionListener(e -> sendMessage());
+inputField = new JTextField() {
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(ModernTheme.BACKGROUND_MEDIUM);
+            g2.fill(new RoundRectangle2D.Double(0, 0, getWidth() - 1, getHeight() - 1, 20, 20));
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    };
+    inputField.setOpaque(false);
+    inputField.setForeground(ModernTheme.TEXT_PRIMARY);
+    inputField.setCaretColor(ModernTheme.TEXT_PRIMARY);
+    inputField.setFont(ModernTheme.FONT_BODY);
+    inputField.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+    inputField.putClientProperty("JTextField.placeholderText", "Type a message...");
+    
+    inputField.addActionListener(e -> sendMessage());
         
-        sendButton = new JButton("Send");
+        sendButton = new ModernButton("Send");
+        sendButton.setPreferredSize(new Dimension(80, 40));
         sendButton.addActionListener(e -> sendMessage());
         
         inputPanel.add(inputField, BorderLayout.CENTER);
@@ -96,7 +124,7 @@ private static final int HISTORY_LIMIT = 50;
         
         splitPane.setLeftComponent(chatPanel);
         splitPane.setRightComponent(rightPanel);
-        splitPane.setDividerLocation(550);
+        splitPane.setDividerLocation(650);
         
         add(splitPane);
         
@@ -114,40 +142,96 @@ private static final int HISTORY_LIMIT = 50;
         });
     }
     
-    private JMenuBar createMenuBar() {
-        JMenuBar menuBar = new JMenuBar();
+private JMenuBar createMenuBar() {
+    JMenuBar menuBar = new JMenuBar();
+    
+    JMenu fileMenu = new JMenu("File");
+    JMenuItem logoutItem = new JMenuItem("Logout");
+    logoutItem.addActionListener(e -> handleLogout());
+    JMenuItem exitItem = new JMenuItem("Exit");
+    exitItem.addActionListener(e -> System.exit(0));
+    
+    fileMenu.add(logoutItem);
+    fileMenu.addSeparator();
+    fileMenu.add(exitItem);
+    
+    JMenu groupMenu = new JMenu("Groups");
+    JMenuItem createGroupItem = new JMenuItem("Create Group");
+    createGroupItem.addActionListener(e -> createGroup());
+    JMenuItem joinGroupItem = new JMenuItem("Join Group");
+    joinGroupItem.addActionListener(e -> joinGroup());
+    JMenuItem leaveGroupItem = new JMenuItem("Leave Group"); // NEW
+    leaveGroupItem.addActionListener(e -> leaveGroup());
+    
+    groupMenu.add(createGroupItem);
+    groupMenu.add(joinGroupItem);
+    groupMenu.addSeparator();
+    groupMenu.add(leaveGroupItem); // NEW
+    
+    JMenu helpMenu = new JMenu("Help");
+    JMenuItem aboutItem = new JMenuItem("About");
+    aboutItem.addActionListener(e -> showAbout());
+    
+    helpMenu.add(aboutItem);
+    
+    menuBar.add(fileMenu);
+    menuBar.add(groupMenu);
+    menuBar.add(helpMenu);
+    
+    return menuBar;
+}
+
+// Add leave group method
+private void leaveGroup() {
+    try {
+        // Get list of groups the user is a member of
+        List<Group> allGroups = client.getAvailableGroups();
+        List<String> userGroups = new ArrayList<>();
         
-        JMenu fileMenu = new JMenu("File");
-        JMenuItem logoutItem = new JMenuItem("Logout");
-        logoutItem.addActionListener(e -> handleLogout());
-        JMenuItem exitItem = new JMenuItem("Exit");
-        exitItem.addActionListener(e -> System.exit(0));
+        for (Group group : allGroups) {
+            if (group.hasMember(client.getUsername())) {
+                userGroups.add(group.getName());
+            }
+        }
         
-        fileMenu.add(logoutItem);
-        fileMenu.addSeparator();
-        fileMenu.add(exitItem);
+        if (userGroups.isEmpty()) {
+            SwingUtils.showInfo(this, "No Groups", "You are not a member of any groups.");
+            return;
+        }
         
-        JMenu groupMenu = new JMenu("Groups");
-        JMenuItem createGroupItem = new JMenuItem("Create Group");
-        createGroupItem.addActionListener(e -> createGroup());
-        JMenuItem joinGroupItem = new JMenuItem("Join Group");
-        joinGroupItem.addActionListener(e -> joinGroup());
+        // Show dialog to select group to leave
+        String groupName = (String) JOptionPane.showInputDialog(
+            this,
+            "Select a group to leave:",
+            "Leave Group",
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            userGroups.toArray(),
+            userGroups.get(0)
+        );
         
-        groupMenu.add(createGroupItem);
-        groupMenu.add(joinGroupItem);
+        if (groupName != null) {
+            int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Are you sure you want to leave group '" + groupName + "'?",
+                "Confirm Leave",
+                JOptionPane.YES_NO_OPTION
+            );
+            
+            if (confirm == JOptionPane.YES_OPTION) {
+                client.leaveGroup(client.getUsername(), groupName);
+                SwingUtils.showInfo(this, "Success", "You have left the group: " + groupName);
+            }
+        }
         
-        JMenu helpMenu = new JMenu("Help");
-        JMenuItem aboutItem = new JMenuItem("About");
-        aboutItem.addActionListener(e -> showAbout());
-        
-        helpMenu.add(aboutItem);
-        
-        menuBar.add(fileMenu);
-        menuBar.add(groupMenu);
-        menuBar.add(helpMenu);
-        
-        return menuBar;
+    } catch (RemoteException e) {
+        SwingUtils.showError(this, "Connection Error", "Failed to leave group: " + e.getMessage());
+    } catch (GroupNotFoundException e) {
+        SwingUtils.showError(this, "Error", "Group not found: " + e.getMessage());
+    } catch (Exception e) {
+        SwingUtils.showError(this, "Error", "An unexpected error occurred: " + e.getMessage());
     }
+}
     
     private JPanel createGroupPanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -311,6 +395,10 @@ private void setupCallbacks() {
                 addMessageToChat(message);
             }
         });
+
+        if(!hasFocus && !message.getSender().equals(client.getUsername())) {
+            playNotificationSound();
+        }
     });
     
     // Load message history after window is visible
@@ -346,5 +434,9 @@ private void showPlaceholder(String text) {
     placeholder.setHorizontalAlignment(SwingConstants.CENTER);
     chatMessagesPanel.add(placeholder);
     chatMessagesPanel.revalidate();
+}
+
+private void playNotificationSound() {
+    Toolkit.getDefaultToolkit().beep();
 }
 }

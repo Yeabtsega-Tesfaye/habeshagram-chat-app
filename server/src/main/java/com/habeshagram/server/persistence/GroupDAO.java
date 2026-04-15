@@ -143,4 +143,31 @@ public class GroupDAO {
         
         return members;
     }
+
+public void deleteGroup(String groupName) {
+    try (Connection conn = DatabaseManager.getInstance().getConnection()) {
+        conn.setAutoCommit(false);
+        
+        // Delete group members first
+        String deleteMembersSQL = "DELETE FROM group_members WHERE group_name = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(deleteMembersSQL)) {
+            pstmt.setString(1, groupName);
+            pstmt.executeUpdate();
+        }
+        
+        // Delete group
+        String deleteGroupSQL = "DELETE FROM groups WHERE name = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(deleteGroupSQL)) {
+            pstmt.setString(1, groupName);
+            pstmt.executeUpdate();
+        }
+        
+        conn.commit();
+        System.out.println("Group deleted: " + groupName);
+        
+    } catch (SQLException e) {
+        System.err.println("Error deleting group: " + e.getMessage());
+    }
+}
+
 }

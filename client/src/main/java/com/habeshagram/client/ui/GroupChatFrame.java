@@ -16,6 +16,10 @@ import java.util.List;
 import javax.swing.SwingConstants;
 import com.habeshagram.common.model.MessageType;
 
+import com.habeshagram.client.ui.components.ModernButton;
+import com.habeshagram.client.ui.theme.ModernTheme;
+import java.awt.geom.RoundRectangle2D;
+
 public class GroupChatFrame extends JFrame {
     private ChatClient client;
     private String groupName;
@@ -26,6 +30,8 @@ public class GroupChatFrame extends JFrame {
     private Set<String> displayedMessageIds = new HashSet<>();
     private static final int HISTORY_LIMIT = 50;
     private JLabel placeholderLabel;
+    private int unreadCount = 0;
+    private boolean hasFocus = false;
     
     public GroupChatFrame(ChatClient client, String groupName) {
         this.client = client;
@@ -34,25 +40,48 @@ public class GroupChatFrame extends JFrame {
         initializeUI();
         setupCallback();
         loadGroupMembers();
+
+        addWindowFocusListener(new WindowAdapter() {
+            @Override
+            public void windowGainedFocus(WindowEvent e) {
+                hasFocus = true;
+                unreadCount = 0;
+                updateTitle();
+            }
+
+            @Override
+            public void windowLostFocus(WindowEvent e) {
+                hasFocus = false;
+            }
+        });
     }
     
 private void initializeUI() {
+    ModernTheme.applyTheme();
     setTitle("Group Chat - " + groupName);
-    setSize(600, 500);
+    setSize(900, 900);
     
     JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
     
     // Messages area
     JPanel chatPanel = new JPanel(new BorderLayout());
+
+    JPanel headerPanel = createHeaderPanel();
+    chatPanel.add(headerPanel, BorderLayout.NORTH);
     
     messagesPanel = new JPanel();
     messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
-    messagesPanel.setBackground(Color.WHITE);
+    messagesPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    messagesPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+    messagesPanel.add(Box.createVerticalGlue()); // Push messages to the top
     
     // Add placeholder
     placeholderLabel = new JLabel("No messages in this group yet. Start the conversation!");
-    placeholderLabel.setForeground(Color.GRAY);
+    placeholderLabel.setForeground(ModernTheme.TEXT_MUTED);
+    placeholderLabel.setFont(ModernTheme.FONT_BODY);
     placeholderLabel.setHorizontalAlignment(SwingConstants.CENTER);
+    placeholderLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
     placeholderLabel.setVisible(false);
     messagesPanel.add(placeholderLabel);
     
@@ -60,13 +89,30 @@ private void initializeUI() {
     scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
     
     // Input area
-    JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
-    inputPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+    JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
+    inputPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    inputPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
     
-    inputField = new JTextField();
+    inputField = new JTextField() {
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(ModernTheme.BACKGROUND_MEDIUM);
+            g2.fill(new RoundRectangle2D.Double(0, 0, getWidth() - 1, getHeight() - 1, 20, 20));
+            g2.dispose();
+            super.paintComponent(g);
+        }
+    };
+    inputField.setOpaque(false);
+    inputField.setForeground(ModernTheme.TEXT_PRIMARY);
+    inputField.setCaretColor(ModernTheme.TEXT_PRIMARY);
+    inputField.setFont(ModernTheme.FONT_BODY);
+    inputField.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
     inputField.addActionListener(e -> sendMessage());
-    
-    JButton sendButton = new JButton("Send");
+   
+    ModernButton sendButton = new ModernButton("Send");
+    sendButton.setPreferredSize(new Dimension(80, 40));
     sendButton.addActionListener(e -> sendMessage());
     
     inputPanel.add(inputField, BorderLayout.CENTER);
@@ -86,7 +132,7 @@ private void initializeUI() {
     
     splitPane.setLeftComponent(chatPanel);
     splitPane.setRightComponent(membersPanel);
-    splitPane.setDividerLocation(400);
+    splitPane.setDividerLocation(600);
     
     add(splitPane);
     
@@ -99,6 +145,35 @@ private void initializeUI() {
         }
     });
 }
+
+// Header with member count
+private JPanel createHeaderPanel() {
+    JPanel header = new JPanel(new BorderLayout());
+    header.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+    header.setBorder(BorderFactory.createEmptyBorder(12, 16, 12, 16));
+    
+    JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+    leftPanel.setOpaque(false);
+    
+    JLabel nameLabel = new JLabel("# " + groupName);
+    nameLabel.setFont(ModernTheme.FONT_HEADER);
+    nameLabel.setForeground(ModernTheme.TEXT_PRIMARY);
+    leftPanel.add(nameLabel);
+    
+    try {
+        java.util.List<String> members = client.getGroupMembers(groupName);
+        JLabel countLabel = new JLabel(members.size() + " members");
+        countLabel.setFont(ModernTheme.FONT_SMALL);
+        countLabel.setForeground(ModernTheme.TEXT_MUTED);
+        leftPanel.add(countLabel);
+    } catch (Exception e) {
+        // Ignore
+    }
+    
+    header.add(leftPanel, BorderLayout.WEST);
+    
+    return header;
+}
     
     private void setupCallback() {
     client.getCallbackImpl().addMessageListener(message -> {
@@ -108,8 +183,17 @@ private void initializeUI() {
                 if (!displayedMessageIds.contains(message.getId())) {
                     displayedMessageIds.add(message.getId());
                     addMessageToUI(message);
+
+                    if (!hasFocus && !message.getSender().equals(client.getUsername())) {
+                        unreadCount++;
+                        updateTitle();
+                    }
                 }
             });
+
+            if(!hasFocus && !message.getSender().equals(client.getUsername())) {
+                playNotificationSound();
+            }
         }
     });
     
@@ -118,6 +202,14 @@ private void initializeUI() {
         loadGroupHistory();
     });
 }
+
+private void updateTitle() {
+    if (unreadCount > 0) {
+        setTitle("Group Chat - " + groupName + " (" + unreadCount + ")");
+    } else {
+        setTitle("Group Chat - " + groupName);
+    }
+}   
     
     private void sendMessage() {
         String content = inputField.getText().trim();
@@ -169,9 +261,10 @@ private void addMessageToUI(Message message) {
     
     boolean isOwnMessage = message.getSender().equals(client.getUsername());
     MessageBubble bubble = new MessageBubble(message, isOwnMessage);
-    
-    messagesPanel.add(bubble);
-    messagesPanel.add(Box.createVerticalStrut(5));
+
+    int insertPosition = messagesPanel.getComponentCount() - 1; // Before the vertical glue
+    messagesPanel.add(bubble, insertPosition);
+    messagesPanel.add(Box.createVerticalStrut(5), insertPosition + 1); // Add spacing after the message
     messagesPanel.revalidate();
     messagesPanel.repaint();
     
@@ -184,6 +277,10 @@ private void addMessageToUI(Message message) {
 // Update placeholder visibility
 private void updatePlaceholder() {
     placeholderLabel.setVisible(displayedMessageIds.isEmpty());
+}
+
+private void playNotificationSound() {
+    Toolkit.getDefaultToolkit().beep();
 }
 
 
