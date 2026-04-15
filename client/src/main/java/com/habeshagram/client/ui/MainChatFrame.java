@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import javax.swing.SwingConstants;
 import java.awt.geom.RoundRectangle2D;
 import com.habeshagram.client.ui.components.ModernButton;
+import com.habeshagram.client.util.SoundManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -34,6 +35,9 @@ public class MainChatFrame extends JFrame {
     private Set<String> displayedMessageIds = new HashSet<>();
 private static final int HISTORY_LIMIT = 50;
 private boolean hasFocus = false;
+
+
+
     
     private Timer refreshTimer;
     
@@ -177,7 +181,14 @@ private JMenuBar createMenuBar() {
     menuBar.add(fileMenu);
     menuBar.add(groupMenu);
     menuBar.add(helpMenu);
+
+    JMenu settingsMenu = new JMenu("Settings");
+    JCheckBoxMenuItem soundItem = new JCheckBoxMenuItem("Sound", true);
+    soundItem.addActionListener(e -> SoundManager.setEnabled(soundItem.isSelected()));
     
+    settingsMenu.add(soundItem);
+    menuBar.add(settingsMenu);
+
     return menuBar;
 }
 
@@ -393,6 +404,10 @@ private void setupCallbacks() {
             if (!displayedMessageIds.contains(message.getId())) {
                 displayedMessageIds.add(message.getId());
                 addMessageToChat(message);
+
+                if(!message.getSender().equals(client.getUsername())) {
+                    SoundManager.playMessageSound();
+                }
             }
         });
 
@@ -437,6 +452,6 @@ private void showPlaceholder(String text) {
 }
 
 private void playNotificationSound() {
-    Toolkit.getDefaultToolkit().beep();
+    SoundManager.playMessageSound();
 }
 }

@@ -52,7 +52,7 @@ public class LoginFrame extends JFrame {
         mainPanel.add(titleLabel, gbc);
         
         // Subtitle
-        JLabel subtitleLabel = new JLabel("Connect with friends and the world");
+        JLabel subtitleLabel = new JLabel("Stay connected the Habesha way!");
         subtitleLabel.setFont(ModernTheme.FONT_SMALL);
         subtitleLabel.setForeground(ModernTheme.TEXT_SECONDARY);
         subtitleLabel.setHorizontalAlignment(SwingConstants.CENTER);

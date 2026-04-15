@@ -18,6 +18,8 @@ import com.habeshagram.client.ui.components.ModernButton;
 import com.habeshagram.client.ui.theme.ModernTheme;
 import java.awt.geom.RoundRectangle2D;
 
+import com.habeshagram.client.util.SoundManager;
+
 public class PrivateChatFrame extends JFrame {
     private ChatClient client;
     private String recipient;
@@ -178,6 +180,10 @@ private void setupCallback() {
                     if (!hasFocus && message.getSender().equals(recipient)) {
                         unreadCount++;
                         updateTitle();
+                    }
+
+                    if (message.getSender().equals(recipient)) {
+                    SoundManager.playMessageSound();
                     }
                 }
             });
