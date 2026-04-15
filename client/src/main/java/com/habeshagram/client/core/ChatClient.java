@@ -103,4 +103,8 @@ public void leaveGroup(String username, String groupName)
     throws RemoteException, GroupNotFoundException {
     server.leaveGroup(username, groupName);
 }
+
+public void sendTypingIndicator(String username, String recipient) throws RemoteException {
+    server.sendTypingIndicator(username, recipient);
+}
 }

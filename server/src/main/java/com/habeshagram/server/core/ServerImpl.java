@@ -327,4 +327,17 @@ public void leaveGroup(String username, String groupName) throws RemoteException
         }
     }
 }
+
+@Override
+public void sendTypingIndicator(String username, String recipient) throws RemoteException {
+    IClientCallback callback = clientRegistry.getClient(recipient);
+    if (callback != null) {
+        try {
+            callback.userTyping(username, recipient);
+        } catch (RemoteException e) {
+            // Ignore
+        }
+    }
+}
+
 }

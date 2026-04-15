@@ -6,15 +6,14 @@ import com.habeshagram.common.model.*;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 import java.rmi.RemoteException;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
-import javax.swing.SwingConstants;
 
 import com.habeshagram.client.ui.components.ModernButton;
+import com.habeshagram.client.ui.components.EmojiPicker;
 import com.habeshagram.client.ui.theme.ModernTheme;
 import java.awt.geom.RoundRectangle2D;
 
@@ -31,6 +30,9 @@ public class PrivateChatFrame extends JFrame {
     private JLabel placeholderLabel;
     private int unreadCount = 0;
     private boolean hasFocus = false;
+    private JLabel typingLabel;
+    private Timer typingTimer;
+    private Boolean isTyping = false;
     
     public PrivateChatFrame(ChatClient client, String recipient) {
         this.client = client;
@@ -63,7 +65,7 @@ private void initializeUI() {
     JPanel mainPanel = new JPanel(new BorderLayout());
     mainPanel.setBackground(ModernTheme.BACKGROUND_DARK);
     
-    // Header with recipient name and status
+    // Header
     JPanel headerPanel = createHeaderPanel();
     mainPanel.add(headerPanel, BorderLayout.NORTH);
     
@@ -73,10 +75,8 @@ private void initializeUI() {
     messagesPanel.setBackground(ModernTheme.BACKGROUND_CHAT);
     messagesPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     
-    // Add vertical glue at the top
     messagesPanel.add(Box.createVerticalGlue());
     
-    // Add placeholder
     placeholderLabel = new JLabel("No messages yet. Say hello!");
     placeholderLabel.setForeground(ModernTheme.TEXT_MUTED);
     placeholderLabel.setFont(ModernTheme.FONT_BODY);
@@ -90,11 +90,19 @@ private void initializeUI() {
     scrollPane.setBorder(null);
     scrollPane.getViewport().setBackground(ModernTheme.BACKGROUND_CHAT);
     
+    // Typing indicator label
+    typingLabel = new JLabel(" ");
+    typingLabel.setFont(ModernTheme.FONT_SMALL);
+    typingLabel.setForeground(ModernTheme.TEXT_MUTED);
+    typingLabel.setHorizontalAlignment(SwingConstants.CENTER);
+    typingLabel.setBorder(BorderFactory.createEmptyBorder(4, 16, 4, 16));
+    
     // Input area
     JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
     inputPanel.setBackground(ModernTheme.BACKGROUND_DARK);
     inputPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
     
+    // Create input field FIRST
     inputField = new JTextField() {
         @Override
         protected void paintComponent(Graphics g) {
@@ -113,15 +121,55 @@ private void initializeUI() {
     inputField.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
     inputField.addActionListener(e -> sendMessage());
     
+    // NOW add the KeyListener AFTER inputField is created
+    inputField.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (!isTyping) {
+                isTyping = true;
+                try {
+                    client.sendTypingIndicator(client.getUsername(), recipient);
+                } catch (RemoteException ex) {
+                    // Ignore
+                }
+                
+                // Reset typing flag after 1 second
+                new Timer(1000, evt -> isTyping = false).start();
+            }
+        }
+    });
+    
+    // Left input panel with emoji button
+    JPanel leftInputPanel = new JPanel(new BorderLayout(5, 0));
+    leftInputPanel.setOpaque(false);
+    
+    ModernButton emojiButton = new ModernButton("😊");
+    emojiButton.setPreferredSize(new Dimension(45, 40));
+    emojiButton.addActionListener(e -> {
+        EmojiPicker picker = new EmojiPicker(emoji -> {
+            inputField.setText(inputField.getText() + emoji);
+        });
+        picker.show(emojiButton, 0, -picker.getPreferredSize().height);
+    });
+    
+    leftInputPanel.add(emojiButton, BorderLayout.WEST);
+    leftInputPanel.add(inputField, BorderLayout.CENTER);
+    
     ModernButton sendButton = new ModernButton("Send");
     sendButton.setPreferredSize(new Dimension(80, 40));
     sendButton.addActionListener(e -> sendMessage());
     
-    inputPanel.add(inputField, BorderLayout.CENTER);
+    inputPanel.add(leftInputPanel, BorderLayout.CENTER);
     inputPanel.add(sendButton, BorderLayout.EAST);
     
+    // Add typing label above input
+    JPanel bottomPanel = new JPanel(new BorderLayout());
+    bottomPanel.setBackground(ModernTheme.BACKGROUND_DARK);
+    bottomPanel.add(typingLabel, BorderLayout.NORTH);
+    bottomPanel.add(inputPanel, BorderLayout.CENTER);
+    
     mainPanel.add(scrollPane, BorderLayout.CENTER);
-    mainPanel.add(inputPanel, BorderLayout.SOUTH);
+    mainPanel.add(bottomPanel, BorderLayout.SOUTH);
     
     add(mainPanel);
     setLocationRelativeTo(null);
@@ -194,6 +242,24 @@ private void setupCallback() {
         }
     });
     
+
+    client.getCallbackImpl().addTypingListener(username -> {
+        if (username.equals(recipient)) {
+            SwingUtilities.invokeLater(() -> {
+                typingLabel.setText(username + " is typing...");
+                
+                // Cancel existing timer
+                if (typingTimer != null) {
+                    typingTimer.stop();
+                }
+                // Hide after 2 seconds
+                typingTimer = new Timer(2000, e -> typingLabel.setText(" "));
+                typingTimer.setRepeats(false);
+                typingTimer.start();
+            });
+        }
+    });
+
     SwingUtilities.invokeLater(() -> {
         loadConversationHistory();
     });

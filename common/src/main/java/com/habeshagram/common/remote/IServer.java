@@ -52,4 +52,6 @@ List<User> getAllUsers() throws RemoteException;
 // Add to IServer.java
 void leaveGroup(String username, String groupName) throws RemoteException, GroupNotFoundException;
 
+// Add method:
+void sendTypingIndicator(String username, String recipient) throws RemoteException;
 }

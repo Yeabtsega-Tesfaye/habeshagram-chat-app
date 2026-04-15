@@ -48,4 +48,17 @@ public class ClientCallbackImpl implements IClientCallback {
     public void addGroupUpdateListener(Consumer<String> listener) {
         groupUpdateListeners.add(listener);
     }
+
+    private List<Consumer<String>> typingListeners = new ArrayList<>();
+
+@Override
+public void userTyping(String username, String recipient) throws RemoteException {
+    for (Consumer<String> listener : typingListeners) {
+        listener.accept(username);
+    }
+}
+
+public void addTypingListener(Consumer<String> listener) {
+    typingListeners.add(listener);
+}
 }
