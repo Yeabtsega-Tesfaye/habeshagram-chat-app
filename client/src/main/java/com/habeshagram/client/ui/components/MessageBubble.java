@@ -54,53 +54,82 @@ public class MessageBubble extends JPanel {
         }
     }
     
-    private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
-        JPanel panel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                
-                g2.setColor(new Color(0, 0, 0, 20));
-                g2.fill(new RoundRectangle2D.Double(2, 2, getWidth() - 1, getHeight() - 1, 12, 12));
-
-
-                Color bgColor = getBubbleColor(message, isOwnMessage);
-                g2.setColor(bgColor);
-                g2.fill(new RoundRectangle2D.Double(0, 0, getWidth() - 1, getHeight() - 1, 12, 12));
-                
-                g2.dispose();
+private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
+    JPanel panel = new JPanel() {
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Draw shadow
+            g2.setColor(new Color(0, 0, 0, 20));
+            g2.fill(new RoundRectangle2D.Double(2, 2, getWidth() - 1, getHeight() - 1, 12, 12));
+            
+            // Draw bubble
+            Color bgColor = getBubbleColor(message, isOwnMessage);
+            g2.setColor(bgColor);
+            g2.fill(new RoundRectangle2D.Double(0, 0, getWidth() - 3, getHeight() - 3, 12, 12));
+            
+            g2.dispose();
+        }
+    };
+    panel.setOpaque(false);
+    panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+    panel.setBorder(new EmptyBorder(BUBBLE_PADDING, BUBBLE_PADDING, BUBBLE_PADDING, BUBBLE_PADDING));
+    
+    // Header for non-system messages
+    if (message.getType() != MessageType.SYSTEM) {
+        if (isOwnMessage) {
+            // Simplified header for own messages
+            JPanel ownHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+            ownHeader.setOpaque(false);
+            
+            // Icon indicator
+            if (message.getType() == MessageType.PRIVATE) {
+                JLabel icon = new JLabel("🔒");
+                icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+                icon.setToolTipText("Private Message");
+                ownHeader.add(icon);
+            } else if (message.getType() == MessageType.GROUP) {
+                JLabel icon = new JLabel("👥");
+                icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+                icon.setToolTipText("Group: " + message.getRecipient());
+                ownHeader.add(icon);
+            } else if (message.getType() == MessageType.BROADCAST) {
+                JLabel icon = new JLabel("📢");
+                icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+                icon.setToolTipText("Broadcast Message");
+                ownHeader.add(icon);
             }
-        };
-        panel.setOpaque(false);
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(new EmptyBorder(BUBBLE_PADDING, BUBBLE_PADDING, BUBBLE_PADDING, BUBBLE_PADDING));
-        
-        // Header (only for group/private messages)
-        if (message.getType() != MessageType.SYSTEM && !isOwnMessage) {
+            
+            JLabel timeLabel = new JLabel(message.getFormattedTime());
+            timeLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(10f));
+            timeLabel.setForeground(ModernTheme.TEXT_MUTED);
+            ownHeader.add(timeLabel);
+            
+            panel.add(ownHeader);
+            panel.add(Box.createVerticalStrut(4));
+        } else {
+            // Full header for others' messages
             JPanel headerPanel = createHeader(message, isOwnMessage);
             panel.add(headerPanel);
             panel.add(Box.createVerticalStrut(4));
         }
-        
-        // Message content
-        JLabel contentLabel = new JLabel("<html><div style='width:" + (MAX_BUBBLE_WIDTH - 40) + "px;'>" 
-                                        + message.getContent().replaceAll("\n", "<br>") + "</div></html>");
-        contentLabel.setFont(ModernTheme.FONT_MESSAGE);
-        contentLabel.setForeground(ModernTheme.TEXT_PRIMARY);
-        panel.add(contentLabel);
-        
-        // Footer with time
-        JPanel footerPanel = createFooter(message, isOwnMessage);
-        panel.add(Box.createVerticalStrut(4));
-        panel.add(footerPanel);
-        
-        // Calculate preferred size
-        int width = Math.min(MAX_BUBBLE_WIDTH, panel.getPreferredSize().width);
-        panel.setPreferredSize(new Dimension(width, panel.getPreferredSize().height));
-        
-        return panel;
     }
+    
+    // Message content
+    JLabel contentLabel = new JLabel("<html><div style='width:" + (MAX_BUBBLE_WIDTH - 40) + "px;'>" 
+                                    + message.getContent().replaceAll("\n", "<br>") + "</div></html>");
+    contentLabel.setFont(ModernTheme.FONT_MESSAGE);
+    contentLabel.setForeground(ModernTheme.TEXT_PRIMARY);
+    panel.add(contentLabel);
+    
+    // Calculate preferred size
+    int width = Math.min(MAX_BUBBLE_WIDTH, panel.getPreferredSize().width);
+    panel.setPreferredSize(new Dimension(width, panel.getPreferredSize().height));
+    
+    return panel;
+}
     
     private Color getBubbleColor(Message message, boolean isOwnMessage) {
         if (message.getType() == MessageType.SYSTEM) {
@@ -133,7 +162,13 @@ private JPanel createHeader(Message message, boolean isOwnMessage) {
         groupIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
         groupIcon.setToolTipText("Group: " + message.getRecipient());
         header.add(groupIcon);
+    }   else if (message.getType() == MessageType.BROADCAST) {
+        JLabel broadcastIcon = new JLabel("📢");
+        broadcastIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+        broadcastIcon.setToolTipText("Broadcast Message");
+        header.add(broadcastIcon);
     }
+    
     
     // Separator dot
     JLabel dotLabel = new JLabel("•");

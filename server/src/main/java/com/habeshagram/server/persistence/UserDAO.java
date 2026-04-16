@@ -25,30 +25,35 @@ public class UserDAO {
         }
     }
     
-    public User getUser(String username) {
-        String sql = "SELECT * FROM users WHERE username = ?";
+public User getUser(String username) {
+    String sql = "SELECT * FROM users WHERE username = ?";
+    
+    try (Connection conn = DatabaseManager.getInstance().getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
         
-        try (Connection conn = DatabaseManager.getInstance().getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, username);
+        ResultSet rs = pstmt.executeQuery();
+        
+        if (rs.next()) {
+            User user = new User();
+            user.setUsername(rs.getString("username"));
+            user.setPasswordHash(rs.getString("password_hash"));
+            user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
+            user.setLastSeen(rs.getTimestamp("last_seen").toLocalDateTime());
             
-            pstmt.setString(1, username);
-            ResultSet rs = pstmt.executeQuery();
+            // Load custom status
+            String customStatus = rs.getString("custom_status");
+            user.setCustomStatus(customStatus != null ? customStatus : "");
             
-            if (rs.next()) {
-                User user = new User();
-                user.setUsername(rs.getString("username"));
-                user.setPasswordHash(rs.getString("password_hash"));
-                user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
-                user.setLastSeen(rs.getTimestamp("last_seen").toLocalDateTime());
-                return user;
-            }
-            
-        } catch (SQLException e) {
-            System.err.println("Error getting user: " + e.getMessage());
+            return user;
         }
         
-        return null;
+    } catch (SQLException e) {
+        System.err.println("Error getting user: " + e.getMessage());
     }
+    
+    return null;
+}
     
     public boolean userExists(String username) {
         String sql = "SELECT 1 FROM users WHERE username = ?";
@@ -82,6 +87,23 @@ public class UserDAO {
         }
     }
 
+    public void updateUser(User user) {
+    String sql = "UPDATE users SET password_hash = ?, last_seen = ?, custom_status = ? WHERE username = ?";
+    
+    try (Connection conn = DatabaseManager.getInstance().getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+        pstmt.setString(1, user.getPasswordHash());
+        pstmt.setTimestamp(2, Timestamp.valueOf(user.getLastSeen()));
+        pstmt.setString(3, user.getCustomStatus());
+        pstmt.setString(4, user.getUsername());
+        
+        pstmt.executeUpdate();
+        
+    } catch (SQLException e) {
+        System.err.println("Error updating user: " + e.getMessage());
+    }
+}
 
 public List<User> getAllUsers() {
     List<User> users = new ArrayList<>();
@@ -97,6 +119,10 @@ public List<User> getAllUsers() {
             user.setPasswordHash(rs.getString("password_hash"));
             user.setCreatedAt(rs.getTimestamp("created_at").toLocalDateTime());
             user.setLastSeen(rs.getTimestamp("last_seen").toLocalDateTime());
+            
+            String customStatus = rs.getString("custom_status");
+            user.setCustomStatus(customStatus != null ? customStatus : "");
+            
             users.add(user);
         }
         
@@ -106,4 +132,5 @@ public List<User> getAllUsers() {
     
     return users;
 }
+
 }

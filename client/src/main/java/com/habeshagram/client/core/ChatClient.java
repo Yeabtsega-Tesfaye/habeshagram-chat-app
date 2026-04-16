@@ -115,4 +115,12 @@ public void sendGroupTypingIndicator(String username, String groupName) throws R
 public void sendBroadcastTypingIndicator(String username) throws RemoteException {
     server.sendBroadcastTypingIndicator(username);
 }
+
+public void setUserStatus(String username, String status) throws RemoteException {
+    server.setUserStatus(username, status);
+}
+
+public String getUserStatus(String username) throws RemoteException {
+    return server.getUserStatus(username);
+}
 }

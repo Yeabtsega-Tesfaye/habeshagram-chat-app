@@ -60,4 +60,7 @@ void sendGroupTypingIndicator(String username, String groupName) throws RemoteEx
 // Add method for broadcast typing
 void sendBroadcastTypingIndicator(String username) throws RemoteException;
 
+// Add these methods to IServer interface
+void setUserStatus(String username, String status) throws RemoteException;
+String getUserStatus(String username) throws RemoteException;
 }

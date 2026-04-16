@@ -14,7 +14,10 @@ public class ClientCallbackImpl implements IClientCallback {
     private List<Consumer<Message>> messageListeners = new ArrayList<>();
     private List<Consumer<UserStatus>> statusListeners = new ArrayList<>();
     private List<Consumer<String>> groupUpdateListeners = new ArrayList<>();
-    
+// Add field
+private List<Consumer<StatusChangeEvent>> statusChangeListeners = new ArrayList<>();
+
+   
     @Override
     public void receiveMessage(Message msg) throws RemoteException {
         for (Consumer<Message> listener : messageListeners) {
@@ -61,4 +64,29 @@ public void userTyping(String username, String recipient) throws RemoteException
 public void addTypingListener(Consumer<String> listener) {
     typingListeners.add(listener);
 }
+
+@Override
+public void userStatusMessageChanged(String username, String newStatus) throws RemoteException {
+    for (Consumer<StatusChangeEvent> listener : statusChangeListeners) {
+        listener.accept(new StatusChangeEvent(username, newStatus));
+    }
+}
+
+public void addStatusChangeListener(Consumer<StatusChangeEvent> listener) {
+    statusChangeListeners.add(listener);
+}
+
+// Inner class for status change event
+public static class StatusChangeEvent {
+    private final String username;
+    private final String newStatus;
+    
+    public StatusChangeEvent(String username, String newStatus) {
+        this.username = username;
+        this.newStatus = newStatus;
+    }
+    
+    public String getUsername() { return username; }
+    public String getNewStatus() { return newStatus; }
+} 
 }

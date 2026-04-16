@@ -12,7 +12,10 @@ public class User implements Serializable {
     private LocalDateTime createdAt;
     private UserStatus status;
     private LocalDateTime lastSeen;
-    
+    private String customStatus = "";
+private LocalDateTime statusExpiry;
+
+
     public User() {}
     
     public User(String username, String passwordHash) {
@@ -37,6 +40,10 @@ public class User implements Serializable {
     
     public LocalDateTime getLastSeen() { return lastSeen; }
     public void setLastSeen(LocalDateTime lastSeen) { this.lastSeen = lastSeen; }
+
+public String getCustomStatus() { return customStatus; }
+public void setCustomStatus(String customStatus) { this.customStatus = customStatus; }
+    
     
     @Override
     public String toString() {

@@ -10,6 +10,7 @@ import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.ArrayList;
 
 public class OnlineUserPanel extends JPanel {
@@ -17,6 +18,7 @@ public class OnlineUserPanel extends JPanel {
     private JList<User> userList;
     private JTextField searchField;
     private List<User> allUsers = new ArrayList<>();
+    private Consumer<String> onStatusChanged;
     
     public OnlineUserPanel() {
         setLayout(new BorderLayout());
@@ -93,6 +95,10 @@ public class OnlineUserPanel extends JPanel {
     public void addUserSelectionListener(java.awt.event.MouseListener listener) {
         userList.addMouseListener(listener);
     }
+
+    public void setOnStatusChanged(Consumer<String> callback) {
+        this.onStatusChanged = callback;
+    }
     
     private class UserListCellRenderer extends DefaultListCellRenderer {
         @Override
@@ -104,18 +110,26 @@ public class OnlineUserPanel extends JPanel {
             
             if (value instanceof User) {
                 User user = (User) value;
-                
-                label.setText("  " + user.getUsername());
+
+                StringBuilder displayText = new StringBuilder(user.getUsername());
+
+                if (user.getCustomStatus() != null && !user.getCustomStatus().isEmpty()) {
+                    displayText.append(" - ").append(user.getCustomStatus());
+                }
+
+                label.setText(displayText.toString());
                 
                 // Simple tooltip - just text, let Swing handle styling
                 if (user.getStatus() == UserStatus.ONLINE) {
-                    label.setToolTipText("Online");
+                    label.setIcon(createOnlineIcon());
+                    label.setToolTipText("Online  " + user.getStatusText());
                 } else {
                     if (user.getLastSeen() != null) {
                         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM d, h:mm a");
                         label.setToolTipText("Last seen: " + user.getLastSeen().format(formatter));
                     } else {
-                        label.setToolTipText("Offline");
+                        label.setIcon(createOfflineIcon());
+                        label.setToolTipText("Offline  " + user.getStatusText());
                     }
                 }
                 
@@ -140,7 +154,7 @@ public class OnlineUserPanel extends JPanel {
                 }
                 
                 label.setOpaque(true);
-                label.setIconTextGap(10);
+                label.setIconTextGap(8);
                 label.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
             }
             

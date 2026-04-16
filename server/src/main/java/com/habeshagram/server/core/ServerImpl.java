@@ -65,31 +65,35 @@ public class ServerImpl implements IServer {
         userDAO.updateLastSeen(username);
         
         // Send system welcome message
-        Message welcomeMsg = new Message(MessageType.SYSTEM, "System", 
-                                        "Welcome to Habeshagram, " + username + "!");
-        try {
-            callback.receiveMessage(welcomeMsg);
-        } catch (RemoteException e) {
-            // Ignore
-        }
-        
-        // Broadcast user joined message
-        broadcastSystemMessage(username + " has joined the chat");
-        
-        // Deliver any pending offline messages
-        List<Message> pendingMessages = messageDAO.getPendingMessages(username);
-        for (Message msg : pendingMessages) {
-            try {
-                callback.receiveMessage(msg);
-                messageDAO.markAsDelivered(msg.getId(), username);
-            } catch (RemoteException e) {
-                break; // Stop if client disconnects
-            }
-        }
-        
-        System.out.println("User logged in: " + username);
-        return callback;
+    String welcomeMsg = "Welcome to Habeshagram, " + username + "!";
+    if (user.getCustomStatus() != null && !user.getCustomStatus().isEmpty()) {
+        welcomeMsg += " Your status: " + user.getCustomStatus();
     }
+    
+    Message msg = new Message(MessageType.SYSTEM, "System", welcomeMsg);
+    try {
+        callback.receiveMessage(msg);
+    } catch (RemoteException e) {
+        // Ignore
+    }
+    
+    // Broadcast user joined message
+    broadcastSystemMessage(username + " has joined the chat");
+    
+    // Deliver any pending offline messages
+    List<Message> pendingMessages = messageDAO.getPendingMessages(username);
+    for (Message pendingMsg : pendingMessages) {
+        try {
+            callback.receiveMessage(pendingMsg);
+            messageDAO.markAsDelivered(pendingMsg.getId(), username);
+        } catch (RemoteException e) {
+            break;
+        }
+    }
+    
+    System.out.println("User logged in: " + username);
+    return callback;
+}
     
     @Override
     public void logout(String username) throws RemoteException {
@@ -371,6 +375,39 @@ public void sendBroadcastTypingIndicator(String username) throws RemoteException
                 } catch (RemoteException e) {
                     // Ignore
                 }
+            }
+        }
+    }
+}
+
+@Override
+public void setUserStatus(String username, String status) throws RemoteException {
+    User user = userDAO.getUser(username);
+    if (user != null) {
+        user.setCustomStatus(status);
+        userDAO.updateUser(user);
+        
+        // Notify all online users about status change
+        broadcastStatusChange(username, status);
+        
+        System.out.println("User " + username + " set status to: " + status);
+    }
+}
+
+@Override
+public String getUserStatus(String username) throws RemoteException {
+    User user = userDAO.getUser(username);
+    return user != null ? user.getCustomStatus() : "";
+}
+
+private void broadcastStatusChange(String username, String newStatus) {
+    for (String onlineUser : clientRegistry.getOnlineUsers()) {
+        IClientCallback callback = clientRegistry.getClient(onlineUser);
+        if (callback != null) {
+            try {
+                callback.userStatusMessageChanged(username, newStatus);
+            } catch (RemoteException e) {
+                // Ignore
             }
         }
     }
