@@ -14,6 +14,8 @@ public interface IClientCallback extends Remote {
 
     void userTyping(String username, String recipient) throws RemoteException;
 
+void groupUserTyping(String username, String groupName) throws RemoteException;
+
     void userStatusMessageChanged(String username, String newStatus) throws RemoteException;
 
     void messageDeleted(String messageId) throws RemoteException;

@@ -36,6 +36,8 @@ public class PrivateChatFrame extends JFrame {
 private ReplyIndicator replyIndicator;
 private JPanel inputContainer;
 private Consumer<Message> onReplyCallback;
+private boolean hasUnreadMessages = false;
+private NewMessageDivider unreadDivider;
     
     public PrivateChatFrame(ChatClient client, String recipient) {
         this.client = client;
@@ -146,6 +148,22 @@ private void initializeUI() {
             }
         }
     });
+
+addWindowFocusListener(new WindowAdapter() {
+    @Override
+    public void windowGainedFocus(WindowEvent e) {
+        hasFocus = true;
+        if (hasUnreadMessages) {
+            hasUnreadMessages = false;
+            removeUnreadDivider();
+        }
+    }
+    
+    @Override
+    public void windowLostFocus(WindowEvent e) {
+        hasFocus = false;
+    }
+});
     
     addWindowListener(new WindowAdapter() {
         @Override
@@ -153,6 +171,25 @@ private void initializeUI() {
             dispose();
         }
     });
+}
+
+private void addUnreadDivider() {
+    if (unreadDivider == null) {
+        unreadDivider = new NewMessageDivider();
+    }
+    // NOTE: Uses messagesPanel (not chatMessagesPanel)
+    messagesPanel.add(unreadDivider, messagesPanel.getComponentCount() - 1);
+    messagesPanel.revalidate();
+    messagesPanel.repaint();
+}
+
+private void removeUnreadDivider() {
+    if (unreadDivider != null && unreadDivider.getParent() != null) {
+        messagesPanel.remove(unreadDivider);
+        messagesPanel.revalidate();
+        messagesPanel.repaint();
+        unreadDivider = null;
+    }
 }
 
 private JPanel createInputPanel() {
@@ -244,6 +281,18 @@ private void setupCallback() {
             SwingUtilities.invokeLater(() -> {
                 if (!displayedMessageIds.contains(message.getId())) {
                     displayedMessageIds.add(message.getId());
+
+                     if (!hasFocus && !message.getSender().equals(client.getUsername())) {
+                    hasUnreadMessages = true;
+                    
+                    // Show toast notification
+                    String title = message.getSender();
+                    String content = message.getContent();
+                    if (content.length() > 50) {
+                        content = content.substring(0, 47) + "...";
+                    }
+                    ToastNotification.show(PrivateChatFrame.this, title, content, message.getType());
+                }
                     addMessageToUI(message);
                     
                     // Count unread messages from recipient
@@ -338,6 +387,11 @@ private void updateTitle() {
     bubble.addReplyHandler(msg -> {
         startReply(msg);
     });
+
+        if (!hasFocus && hasUnreadMessages && unreadDivider == null && 
+        message.getSender().equals(recipient)) {
+        addUnreadDivider();
+    }
     
     // Rest of existing addMessageToUI code...
     int insertPosition = messagesPanel.getComponentCount() - 1;

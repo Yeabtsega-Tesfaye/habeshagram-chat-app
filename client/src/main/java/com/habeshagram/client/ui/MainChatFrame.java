@@ -5,6 +5,7 @@ import com.habeshagram.client.ui.components.ContextMenuFactory;
 import com.habeshagram.client.ui.components.EmojiPicker;
 import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.OnlineUserPanel;
+import com.habeshagram.client.ui.components.ToastNotification;
 import com.habeshagram.client.util.SwingUtils;
 import com.habeshagram.common.model.*;
 import com.habeshagram.common.exception.GroupNotFoundException;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.awt.geom.RoundRectangle2D;
 import com.habeshagram.client.ui.components.ModernButton;
+import com.habeshagram.client.ui.components.NewMessageDivider;
 import com.habeshagram.client.util.ClipboardHelper;
 import com.habeshagram.client.util.SoundManager;
 
@@ -35,6 +37,7 @@ public class MainChatFrame extends JFrame {
     private Map<String, PrivateChatFrame> privateChats;
     private Set<String> displayedMessageIds = new HashSet<>();
     private static final int HISTORY_LIMIT = 50;
+    private int unreadCount = 0;
     private boolean hasFocus = false;
     private JLabel typingLabel;
     private Timer typingTimer;
@@ -42,6 +45,8 @@ public class MainChatFrame extends JFrame {
     private String currentTypingUser = null;
     private Timer refreshTimer;
     private JLabel onlineCountLabel;
+private boolean hasUnreadMessages = false;
+private NewMessageDivider unreadDivider;
 
     public MainChatFrame(ChatClient client) {
         this.client = client;
@@ -128,6 +133,7 @@ public class MainChatFrame extends JFrame {
         chatMessagesPanel.setLayout(new BoxLayout(chatMessagesPanel, BoxLayout.Y_AXIS));
         chatMessagesPanel.setBackground(ModernTheme.BACKGROUND_CHAT);
         chatMessagesPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        chatMessagesPanel.add(Box.createVerticalGlue()); // Push messages to the top
 
         chatScrollPane = new JScrollPane(chatMessagesPanel);
         chatScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
@@ -258,6 +264,22 @@ public class MainChatFrame extends JFrame {
         setJMenuBar(createMenuBar());
 
         setLocationRelativeTo(null);
+
+addWindowFocusListener(new WindowAdapter() {
+    @Override
+    public void windowGainedFocus(WindowEvent e) {
+        hasFocus = true;
+        if (hasUnreadMessages) {
+            hasUnreadMessages = false;
+            removeUnreadDivider();
+        }
+    }
+    
+    @Override
+    public void windowLostFocus(WindowEvent e) {
+        hasFocus = false;
+    }
+});
 
         // Window closing handler
         addWindowListener(new WindowAdapter() {
@@ -672,33 +694,37 @@ private void leaveGroup(String groupName) {
     }
 }
 
-    private void addMessageToChat(Message message) {
-        boolean isOwnMessage = message.getSender().equals(client.getUsername());
-        MessageBubble bubble = new MessageBubble(message, isOwnMessage, msg -> {
-            deleteMessage(msg);
-        });
-
-        // Add reply handler
-        if (!message.getSender().equals("System") && !message.getSender().equals(client.getUsername())) {
-            bubble.addReplyHandler(msg -> {
-                if (message.getType() == MessageType.GROUP) {
-                    openGroupChatWithReply(msg);
-                } else {
-                    openPrivateChatWithReply(msg);
-                }
-            });
-        }
-
-        chatMessagesPanel.add(bubble);
-        chatMessagesPanel.add(Box.createVerticalStrut(5));
-        chatMessagesPanel.revalidate();
-
-        SwingUtilities.invokeLater(() -> {
-            JScrollBar vertical = chatScrollPane.getVerticalScrollBar();
-            vertical.setValue(vertical.getMaximum());
+private void addMessageToChat(Message message) {
+    boolean isOwnMessage = message.getSender().equals(client.getUsername());
+    MessageBubble bubble = new MessageBubble(message, isOwnMessage, msg -> {
+        deleteMessage(msg);
+    });
+    
+    // Add reply handler
+    if (!message.getSender().equals("System") && !isOwnMessage) {
+        bubble.addReplyHandler(msg -> {
+            if (message.getType() == MessageType.GROUP) {
+                openGroupChatWithReply(msg);
+            } else {
+                openPrivateChatWithReply(msg);
+            }
         });
     }
-
+    
+    // Add BEFORE the glue (which is the last component)
+    int insertPosition = chatMessagesPanel.getComponentCount() - 1;
+    chatMessagesPanel.add(bubble, insertPosition);
+    chatMessagesPanel.add(Box.createVerticalStrut(5), insertPosition + 1);
+    
+    chatMessagesPanel.revalidate();
+    chatMessagesPanel.repaint();
+    
+    // Auto-scroll
+    SwingUtilities.invokeLater(() -> {
+        JScrollBar vertical = chatScrollPane.getVerticalScrollBar();
+        vertical.setValue(vertical.getMaximum());
+    });
+}
     private void openGroupChatWithReply(Message message) {
         String groupName = message.getRecipient();
 
@@ -876,18 +902,39 @@ private void leaveGroup(String groupName) {
     }
 
     private void setupCallbacks() {
-        // Message listener
-        client.getCallbackImpl().addMessageListener(message -> {
-            SwingUtilities.invokeLater(() -> {
-                if (!displayedMessageIds.contains(message.getId())) {
-                    displayedMessageIds.add(message.getId());
-                    addMessageToChat(message);
-
-                    if (!message.getSender().equals(client.getUsername())) {
-                        SoundManager.playMessageSound();
+   client.getCallbackImpl().addMessageListener(message -> {
+        SwingUtilities.invokeLater(() -> {
+            if (!displayedMessageIds.contains(message.getId())) {
+                displayedMessageIds.add(message.getId());
+                
+                boolean isOwnMessage = message.getSender().equals(client.getUsername());
+                
+                // If window NOT focused and message is from someone else
+                if (!hasFocus && !isOwnMessage) {
+                    // Mark that we have unread messages
+                    hasUnreadMessages = true;
+                    
+                    // Add divider before adding the message
+                    if (unreadDivider == null) {
+                        addUnreadDivider();
                     }
+                    
+                    // Show toast notification
+                    String title = message.getSender();
+                    String content = message.getContent();
+                    if (content.length() > 50) {
+                        content = content.substring(0, 47) + "...";
+                    }
+                    ToastNotification.show(MainChatFrame.this, title, content, message.getType());
                 }
-            });
+                
+                addMessageToChat(message);
+                
+                if (!isOwnMessage) {
+                    SoundManager.playMessageSound();
+                }
+            }
+        });
         });
 
         // Typing listener
@@ -948,30 +995,39 @@ private void loadMessageHistory() {
     try {
         List<Message> allMessages = new ArrayList<>();
         
-        // Get broadcast/system messages
-        List<Message> broadcastHistory = client.getRecentMessages(client.getUsername(), HISTORY_LIMIT);
-        allMessages.addAll(broadcastHistory);
+        allMessages.addAll(client.getRecentMessages(client.getUsername(), HISTORY_LIMIT));
+        allMessages.addAll(client.getRecentPrivateMessages(client.getUsername(), HISTORY_LIMIT));
+        allMessages.addAll(client.getRecentGroupMessages(client.getUsername(), HISTORY_LIMIT));
         
-        // Get recent private messages involving this user
-        List<Message> privateHistory = client.getRecentPrivateMessages(client.getUsername(), HISTORY_LIMIT);
-        allMessages.addAll(privateHistory);
-        
-        // Get recent group messages for groups this user is a member of
-        List<Message> groupHistory = client.getRecentGroupMessages(client.getUsername(), HISTORY_LIMIT);
-        allMessages.addAll(groupHistory);
-        
-        // Sort all messages by timestamp (oldest first)
         allMessages.sort((m1, m2) -> m1.getTimestamp().compareTo(m2.getTimestamp()));
         
-        // Display messages in chronological order
         for (Message msg : allMessages) {
             if (!displayedMessageIds.contains(msg.getId())) {
                 displayedMessageIds.add(msg.getId());
-                addMessageToChat(msg);
+                
+                boolean isOwnMessage = msg.getSender().equals(client.getUsername());
+                MessageBubble bubble = new MessageBubble(msg, isOwnMessage, m -> deleteMessage(m));
+                
+                if (!msg.getSender().equals("System") && !isOwnMessage) {
+                    bubble.addReplyHandler(m -> {
+                        if (msg.getType() == MessageType.GROUP) {
+                            openGroupChatWithReply(m);
+                        } else {
+                            openPrivateChatWithReply(m);
+                        }
+                    });
+                }
+                
+                // Add BEFORE the glue
+                int insertPosition = chatMessagesPanel.getComponentCount() - 1;
+                chatMessagesPanel.add(bubble, insertPosition);
+                chatMessagesPanel.add(Box.createVerticalStrut(5), insertPosition + 1);
             }
         }
         
-        // Show placeholder if no messages
+        chatMessagesPanel.revalidate();
+        chatMessagesPanel.repaint();
+        
         if (displayedMessageIds.isEmpty()) {
             showPlaceholder("No messages yet. Start chatting!");
         }
@@ -979,7 +1035,6 @@ private void loadMessageHistory() {
         System.err.println("Failed to load message history: " + e.getMessage());
     }
 }
-
     // Add placeholder method
     private void showPlaceholder(String text) {
         JLabel placeholder = new JLabel(text);
@@ -1011,5 +1066,23 @@ private void loadMessageHistory() {
 
         JOptionPane.showMessageDialog(this, message, "User Profile", JOptionPane.INFORMATION_MESSAGE);
     }
+
+    private void addUnreadDivider() {
+    if (unreadDivider == null) {
+        unreadDivider = new NewMessageDivider();
+    }
+    chatMessagesPanel.add(unreadDivider, chatMessagesPanel.getComponentCount() - 1);
+    chatMessagesPanel.revalidate();
+    chatMessagesPanel.repaint();
+}
+
+private void removeUnreadDivider() {
+    if (unreadDivider != null && unreadDivider.getParent() != null) {
+        chatMessagesPanel.remove(unreadDivider);
+        chatMessagesPanel.revalidate();
+        chatMessagesPanel.repaint();
+        unreadDivider = null;
+    }
+}
 
 }

@@ -347,16 +347,19 @@ public void sendTypingIndicator(String username, String recipient) throws Remote
 @Override
 public void sendGroupTypingIndicator(String username, String groupName) throws RemoteException {
     Group group = groupDAO.getGroup(groupName);
-    if (group != null) {
-        for (String member : group.getMembers()) {
-            if (!member.equals(username)) {
-                IClientCallback callback = clientRegistry.getClient(member);
-                if (callback != null) {
-                    try {
-                        callback.userTyping(username, groupName);
-                    } catch (RemoteException e) {
-                        // Ignore
-                    }
+    if (group == null || !group.hasMember(username)) {
+        return; // User not in group
+    }
+    
+    // Send typing indicator to all online group members EXCEPT the sender
+    for (String member : group.getMembers()) {
+        if (!member.equals(username) && clientRegistry.isOnline(member)) {
+            IClientCallback callback = clientRegistry.getClient(member);
+            if (callback != null) {
+                try {
+                    callback.groupUserTyping(username, groupName);
+                } catch (RemoteException e) {
+                    // Ignore
                 }
             }
         }

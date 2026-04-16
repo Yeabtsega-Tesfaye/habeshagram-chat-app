@@ -14,7 +14,9 @@ import com.habeshagram.client.core.ChatClient;
 import com.habeshagram.client.ui.components.EmojiPicker;
 import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.ModernButton;
+import com.habeshagram.client.ui.components.NewMessageDivider;
 import com.habeshagram.client.ui.components.ReplyIndicator;
+import com.habeshagram.client.ui.components.ToastNotification;
 import com.habeshagram.client.ui.theme.ModernTheme;
 import com.habeshagram.client.util.SoundManager;
 import com.habeshagram.common.exception.GroupNotFoundException;
@@ -39,6 +41,8 @@ public class GroupChatFrame extends JFrame {
     private Message replyingTo = null;
     private ReplyIndicator replyIndicator;
     private JPanel inputContainer;
+private boolean hasUnreadMessages = false;
+private NewMessageDivider unreadDivider;
 
     public GroupChatFrame(ChatClient client, String groupName) {
         this.client = client;
@@ -161,21 +165,49 @@ private void initializeUI() {
     });
     
     // Typing indicator key listener
-    inputField.addKeyListener(new KeyAdapter() {
-        @Override
-        public void keyPressed(KeyEvent e) {
-            if (!isTyping) {
-                isTyping = true;
-                try {
-                    client.sendTypingIndicator(client.getUsername(), groupName);
-                } catch (RemoteException ex) {
-                    // Ignore
-                }
-                
-                new Timer(1000, evt -> isTyping = false).start();
-            }
+inputField.addKeyListener(new KeyAdapter() {
+    @Override
+    public void keyPressed(KeyEvent e) {
+        // Skip for special keys
+        if (e.getKeyCode() == KeyEvent.VK_ENTER || 
+            e.getKeyCode() == KeyEvent.VK_ESCAPE ||
+            e.getKeyCode() == KeyEvent.VK_SHIFT ||
+            e.getKeyCode() == KeyEvent.VK_CONTROL ||
+            e.getKeyCode() == KeyEvent.VK_ALT) {
+            return;
         }
-    });
+        
+        if (!isTyping) {
+            isTyping = true;
+            try {
+                client.sendGroupTypingIndicator(client.getUsername(), groupName);
+            } catch (RemoteException ex) {
+                // Ignore
+            }
+            
+            // Reset after 1 second
+            Timer timer = new Timer(1000, evt -> isTyping = false);
+            timer.setRepeats(false);
+            timer.start();
+        }
+    }
+});
+
+addWindowFocusListener(new WindowAdapter() {
+    @Override
+    public void windowGainedFocus(WindowEvent e) {
+        hasFocus = true;
+        if (hasUnreadMessages) {
+            hasUnreadMessages = false;
+            removeUnreadDivider();
+        }
+    }
+    
+    @Override
+    public void windowLostFocus(WindowEvent e) {
+        hasFocus = false;
+    }
+});
     
     addWindowListener(new WindowAdapter() {
         @Override
@@ -184,6 +216,26 @@ private void initializeUI() {
         }
     });
 }
+
+private void addUnreadDivider() {
+    if (unreadDivider == null) {
+        unreadDivider = new NewMessageDivider();
+    }
+    // NOTE: Uses messagesPanel
+    messagesPanel.add(unreadDivider, messagesPanel.getComponentCount() - 1);
+    messagesPanel.revalidate();
+    messagesPanel.repaint();
+}
+
+private void removeUnreadDivider() {
+    if (unreadDivider != null && unreadDivider.getParent() != null) {
+        messagesPanel.remove(unreadDivider);
+        messagesPanel.revalidate();
+        messagesPanel.repaint();
+        unreadDivider = null;
+    }
+}
+
 
 private JPanel createInputPanel() {
     JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
@@ -267,6 +319,19 @@ private JPanel createInputPanel() {
                 SwingUtilities.invokeLater(() -> {
                     if (!displayedMessageIds.contains(message.getId())) {
                         displayedMessageIds.add(message.getId());
+
+                                        if (!hasFocus && !message.getSender().equals(client.getUsername())) {
+                    hasUnreadMessages = true;
+                    
+                    // Show toast notification
+                    String title = message.getSender();
+                    String content = message.getContent();
+                    if (content.length() > 50) {
+                        content = content.substring(0, 47) + "...";
+                    }
+                    ToastNotification.show(GroupChatFrame.this, title, content, message.getType());
+                }
+                
                         addMessageToUI(message);
 
                         if (!message.getSender().equals(client.getUsername())) {
@@ -277,22 +342,27 @@ private JPanel createInputPanel() {
             }
         });
 
-        // Typing listener for group
-        client.getCallbackImpl().addTypingListener((username) -> {
-            // Check if typing is for this group (you may need to track which group)
+    client.getCallbackImpl().addMessageListener(message -> {
+        // ... existing message handling ...
+    });
+    
+    // Add group typing listener
+    client.getCallbackImpl().addGroupTypingListener(event -> {
+        if (event.getGroupName().equals(groupName) && !event.getUsername().equals(client.getUsername())) {
             SwingUtilities.invokeLater(() -> {
-                if (!username.equals(client.getUsername())) {
-                    typingLabel.setText(username + " is typing...");
-
-                    if (typingTimer != null) {
-                        typingTimer.stop();
-                    }
-                    typingTimer = new Timer(2000, e -> typingLabel.setText(" "));
-                    typingTimer.setRepeats(false);
-                    typingTimer.start();
+                typingLabel.setText(event.getUsername() + " is typing...");
+                
+                if (typingTimer != null) {
+                    typingTimer.stop();
                 }
+                typingTimer = new Timer(2000, e -> typingLabel.setText(" "));
+                typingTimer.setRepeats(false);
+                typingTimer.start();
             });
-        });
+        }
+    });
+
+
 
         // In setupCallback() method, add:
         client.getCallbackImpl().addDeleteListener(messageId -> {
@@ -381,6 +451,11 @@ private void addMessageToUI(Message message) {
     bubble.addReplyHandler(msg -> {
         startReply(msg);
     });
+
+        if (!hasFocus && hasUnreadMessages && unreadDivider == null && 
+        !message.getSender().equals(client.getUsername())) {
+        addUnreadDivider();
+    }
     
     int insertPosition = messagesPanel.getComponentCount() - 1;
     messagesPanel.add(bubble, insertPosition);

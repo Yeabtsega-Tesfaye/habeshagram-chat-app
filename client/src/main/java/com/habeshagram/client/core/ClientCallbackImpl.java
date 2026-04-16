@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import javax.swing.SwingUtilities;
+
 public class ClientCallbackImpl implements IClientCallback {
     private List<Consumer<Message>> messageListeners = new ArrayList<>();
     private List<Consumer<UserStatus>> statusListeners = new ArrayList<>();
@@ -60,6 +62,35 @@ public void userTyping(String username, String recipient) throws RemoteException
     for (Consumer<String> listener : typingListeners) {
         listener.accept(username);
     }
+}
+
+private List<Consumer<GroupTypingEvent>> groupTypingListeners = new ArrayList<>();
+
+@Override
+public void groupUserTyping(String username, String groupName) throws RemoteException {
+    SwingUtilities.invokeLater(() -> {
+        for (Consumer<GroupTypingEvent> listener : groupTypingListeners) {
+            listener.accept(new GroupTypingEvent(username, groupName));
+        }
+    });
+}
+
+public void addGroupTypingListener(Consumer<GroupTypingEvent> listener) {
+    groupTypingListeners.add(listener);
+}
+
+// Inner class for group typing event
+public static class GroupTypingEvent {
+    private final String username;
+    private final String groupName;
+    
+    public GroupTypingEvent(String username, String groupName) {
+        this.username = username;
+        this.groupName = groupName;
+    }
+    
+    public String getUsername() { return username; }
+    public String getGroupName() { return groupName; }
 }
 
 public void addTypingListener(Consumer<String> listener) {
