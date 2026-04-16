@@ -1,6 +1,7 @@
 package com.habeshagram.client.ui;
 
 import com.habeshagram.client.core.ChatClient;
+import com.habeshagram.client.ui.components.ContextMenuFactory;
 import com.habeshagram.client.ui.components.EmojiPicker;
 import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.client.ui.components.OnlineUserPanel;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.awt.geom.RoundRectangle2D;
 import com.habeshagram.client.ui.components.ModernButton;
+import com.habeshagram.client.util.ClipboardHelper;
 import com.habeshagram.client.util.SoundManager;
 
 import javax.swing.*;
@@ -54,7 +56,7 @@ public class MainChatFrame extends JFrame {
         ModernTheme.applyTheme();
         setTitle("Habeshagram - " + client.getUsername());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 700);
+        setSize(1100, 1000);
         getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
 
         // Main split pane
@@ -226,6 +228,21 @@ public class MainChatFrame extends JFrame {
             }
         });
 
+        onlineUserPanel.setOnMessageUser(user -> {
+            if (!user.getUsername().equals(client.getUsername())) {
+                PrivateChatFrame chatFrame = privateChats.get(user.getUsername());
+                if (chatFrame == null) {
+                    chatFrame = new PrivateChatFrame(client, user.getUsername());
+                    privateChats.put(user.getUsername(), chatFrame);
+                }
+                chatFrame.setVisible(true);
+            }
+        });
+
+        onlineUserPanel.setOnViewProfile(user -> {
+            showProfileDialog(user);
+        });
+
         JPanel groupPanel = createGroupPanel();
 
         rightPanel.add(onlineUserPanel, BorderLayout.CENTER);
@@ -233,7 +250,7 @@ public class MainChatFrame extends JFrame {
 
         splitPane.setLeftComponent(chatPanel);
         splitPane.setRightComponent(rightPanel);
-        splitPane.setDividerLocation(700);
+        splitPane.setDividerLocation(800);
 
         add(splitPane);
 
@@ -263,19 +280,18 @@ public class MainChatFrame extends JFrame {
         JMenuItem exitItem = createModernMenuItem("❌ Exit");
         exitItem.addActionListener(e -> System.exit(0));
 
-        JMenuItem setStatusItem = new JMenuItem("Set Status...");
-       setStatusItem.addActionListener(e -> showSetStatusDialog());
-    
-    JMenuItem clearStatusItem = new JMenuItem("Clear Status");
-    clearStatusItem.addActionListener(e -> clearStatus());
+        JMenuItem setStatusItem = new JMenuItem("Set Status");
+        setStatusItem.addActionListener(e -> showSetStatusDialog());
 
-    
-    fileMenu.add(setStatusItem);
-    fileMenu.add(clearStatusItem);
-    fileMenu.addSeparator();
-    fileMenu.add(logoutItem);
-    fileMenu.addSeparator();
-    fileMenu.add(exitItem);
+        JMenuItem clearStatusItem = new JMenuItem("Clear Status");
+        clearStatusItem.addActionListener(e -> clearStatus());
+
+        fileMenu.add(setStatusItem);
+        fileMenu.add(clearStatusItem);
+        fileMenu.addSeparator();
+        fileMenu.add(logoutItem);
+        fileMenu.addSeparator();
+        fileMenu.add(exitItem);
 
         // Groups Menu
         JMenu groupMenu = createModernMenu("👥 Groups");
@@ -313,51 +329,51 @@ public class MainChatFrame extends JFrame {
     }
 
     private void showSetStatusDialog() {
-    // Predefined statuses
-    String[] suggestions = {
-        "Available",
-        "Busy",
-        "In a meeting",
-        "At school",
-        "At work",
-        "Eating",
-        "Sleeping",
-        "Gaming",
-        "Studying",
-        "Listening to music"
-    };
-    
-    JComboBox<String> suggestionBox = new JComboBox<>(suggestions);
-    suggestionBox.setEditable(true);
-    
-    JPanel panel = new JPanel(new BorderLayout(10, 10));
-    panel.add(new JLabel("Enter your status:"), BorderLayout.NORTH);
-    panel.add(suggestionBox, BorderLayout.CENTER);
-    
-    int result = JOptionPane.showConfirmDialog(this, panel, "Set Status", 
-                                               JOptionPane.OK_CANCEL_OPTION);
-    
-    if (result == JOptionPane.OK_OPTION) {
-        String status = (String) suggestionBox.getSelectedItem();
-        if (status != null && !status.trim().isEmpty()) {
-            try {
-                client.setUserStatus(client.getUsername(), status.trim());
-                SwingUtils.showInfo(this, "Status Updated", "Your status has been set to: " + status);
-            } catch (RemoteException e) {
-                SwingUtils.showError(this, "Error", "Failed to set status: " + e.getMessage());
+        // Predefined statuses
+        String[] suggestions = {
+                "Available",
+                "Busy",
+                "In a meeting",
+                "At school",
+                "At work",
+                "Eating",
+                "Sleeping",
+                "Gaming",
+                "Studying",
+                "Listening to music"
+        };
+
+        JComboBox<String> suggestionBox = new JComboBox<>(suggestions);
+        suggestionBox.setEditable(true);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.add(new JLabel("Enter your status:"), BorderLayout.NORTH);
+        panel.add(suggestionBox, BorderLayout.CENTER);
+
+        int result = JOptionPane.showConfirmDialog(this, panel, "Set Status",
+                JOptionPane.OK_CANCEL_OPTION);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String status = (String) suggestionBox.getSelectedItem();
+            if (status != null && !status.trim().isEmpty()) {
+                try {
+                    client.setUserStatus(client.getUsername(), status.trim());
+                    SwingUtils.showInfo(this, "Status Updated", "Your status has been set to: " + status);
+                } catch (RemoteException e) {
+                    SwingUtils.showError(this, "Error", "Failed to set status: " + e.getMessage());
+                }
             }
         }
     }
-}   
 
-private void clearStatus() {
-    try {
-        client.setUserStatus(client.getUsername(), "");
-        SwingUtils.showInfo(this, "Status Cleared", "Your status has been cleared.");
-    } catch (RemoteException e) {
-        SwingUtils.showError(this, "Error", "Failed to clear status: " + e.getMessage());
+    private void clearStatus() {
+        try {
+            client.setUserStatus(client.getUsername(), "");
+            SwingUtils.showInfo(this, "Status Cleared", "Your status has been cleared.");
+        } catch (RemoteException e) {
+            SwingUtils.showError(this, "Error", "Failed to clear status: " + e.getMessage());
+        }
     }
-}
 
     private JMenu createModernMenu(String text) {
         JMenu menu = new JMenu(text);
@@ -451,56 +467,287 @@ private void clearStatus() {
         }
     }
 
-    private JPanel createGroupPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Groups"));
-        panel.setPreferredSize(new Dimension(200, 150));
-
-        DefaultListModel<String> groupListModel = new DefaultListModel<>();
-        JList<String> groupList = new JList<>(groupListModel);
-
-        groupList.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    String selectedGroup = groupList.getSelectedValue();
-                    if (selectedGroup != null) {
-                        openGroupChat(selectedGroup);
-                    }
+private JPanel createGroupPanel() {
+    JPanel panel = new JPanel(new BorderLayout());
+    panel.setBorder(BorderFactory.createTitledBorder(
+        BorderFactory.createLineBorder(ModernTheme.BACKGROUND_LIGHT),
+        "Groups",
+        javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+        javax.swing.border.TitledBorder.DEFAULT_POSITION,
+        ModernTheme.FONT_HEADER,
+        ModernTheme.TEXT_PRIMARY
+    ));
+    panel.setPreferredSize(new Dimension(200, 150));
+    
+    DefaultListModel<String> groupListModel = new DefaultListModel<>();
+    JList<String> groupList = new JList<>(groupListModel);
+    groupList.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+    groupList.setForeground(ModernTheme.TEXT_PRIMARY);
+    groupList.setFont(ModernTheme.FONT_BODY);
+    groupList.setSelectionBackground(ModernTheme.PRIMARY);
+    
+    // Double-click to open group
+    groupList.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            if (e.getClickCount() == 2) {
+                String selectedGroup = groupList.getSelectedValue();
+                if (selectedGroup != null) {
+                    openGroupChat(selectedGroup);
                 }
             }
-        });
-
-        JScrollPane scrollPane = new JScrollPane(groupList);
-        panel.add(scrollPane, BorderLayout.CENTER);
-
-        // Refresh groups periodically
-        new Timer(5000, e -> {
-            try {
-                groupListModel.clear();
-                client.getAvailableGroups().forEach(g -> groupListModel.addElement(g.getName()));
-            } catch (RemoteException ex) {
-                // Ignore
+        }
+        
+        @Override
+        public void mousePressed(MouseEvent e) {
+            if (e.isPopupTrigger()) {
+                showGroupContextMenu(e, groupList);
             }
-        }).start();
+        }
+        
+        @Override
+        public void mouseReleased(MouseEvent e) {
+            if (e.isPopupTrigger()) {
+                showGroupContextMenu(e, groupList);
+            }
+        }
+    });
+    
+    JScrollPane scrollPane = new JScrollPane(groupList);
+    scrollPane.setBorder(null);
+    scrollPane.setBackground(ModernTheme.BACKGROUND_DARK);
+    panel.add(scrollPane, BorderLayout.CENTER);
+    
+    // Refresh groups periodically
+    new Timer(5000, e -> {
+        try {
+            groupListModel.clear();
+            client.getAvailableGroups().forEach(g -> groupListModel.addElement(g.getName()));
+        } catch (RemoteException ex) {
+            // Ignore
+        }
+    }).start();
+    
+    return panel;
+}
 
-        return panel;
+private void showGroupContextMenu(MouseEvent e, JList<String> groupList) {
+    int index = groupList.locationToIndex(e.getPoint());
+    if (index >= 0) {
+        groupList.setSelectedIndex(index);
+        String selectedGroup = groupList.getSelectedValue();
+        
+        if (selectedGroup != null) {
+            JPopupMenu menu = createGroupContextMenu(selectedGroup);
+            menu.show(groupList, e.getX(), e.getY());
+        }
     }
+}
+
+private JPopupMenu createGroupContextMenu(String groupName) {
+    JPopupMenu menu = new JPopupMenu();
+    menu.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+    menu.setBorder(BorderFactory.createLineBorder(ModernTheme.BACKGROUND_LIGHT));
+    
+    // Open group
+    JMenuItem openItem = createMenuItem("💬 Open Group", () -> {
+        openGroupChat(groupName);
+    });
+    menu.add(openItem);
+    
+    // View members
+    JMenuItem membersItem = createMenuItem("👥 View Members", () -> {
+        showGroupMembers(groupName);
+    });
+    menu.add(membersItem);
+    
+    menu.addSeparator();
+    
+    // Check if user is a member
+    try {
+        java.util.List<String> members = client.getGroupMembers(groupName);
+        boolean isMember = members.contains(client.getUsername());
+        
+        if (!isMember) {
+            // Join group option
+            JMenuItem joinItem = createMenuItem("➕ Join Group", () -> {
+                joinGroup(groupName);
+            });
+            menu.add(joinItem);
+        } else {
+            // Leave group option (only if not creator, or always allow)
+            JMenuItem leaveItem = createMenuItem("🚪 Leave Group", () -> {
+                leaveGroup(groupName);
+            });
+            menu.add(leaveItem);
+        }
+    } catch (Exception ex) {
+        // Ignore
+    }
+    
+    menu.addSeparator();
+    
+    // Copy group name
+    JMenuItem copyItem = createMenuItem("📋 Copy Group Name", () -> {
+        ClipboardHelper.copyToClipboard(groupName);
+        ContextMenuFactory.showToast(this, "Group name copied!");
+    });
+    menu.add(copyItem);
+    
+    return menu;
+}
+
+private JMenuItem createMenuItem(String text, Runnable action) {
+    JMenuItem item = new JMenuItem(text);
+    item.setFont(ModernTheme.FONT_BODY);
+    item.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+    item.setForeground(ModernTheme.TEXT_PRIMARY);
+    item.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+    
+    item.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            item.setBackground(ModernTheme.PRIMARY);
+        }
+        
+        @Override
+        public void mouseExited(MouseEvent e) {
+            item.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+        }
+    });
+    
+    item.addActionListener(e -> action.run());
+    
+    return item;
+}
+
+private void showGroupMembers(String groupName) {
+    try {
+        java.util.List<String> members = client.getGroupMembers(groupName);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Members of ").append(groupName).append(":\n\n");
+        for (String member : members) {
+            sb.append("• ").append(member).append("\n");
+        }
+        
+        JTextArea textArea = new JTextArea(sb.toString());
+        textArea.setEditable(false);
+        textArea.setFont(ModernTheme.FONT_BODY);
+        textArea.setBackground(ModernTheme.BACKGROUND_MEDIUM);
+        textArea.setForeground(ModernTheme.TEXT_PRIMARY);
+        
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(300, 200));
+        
+        JOptionPane.showMessageDialog(this, scrollPane, 
+            "Group Members", JOptionPane.INFORMATION_MESSAGE);
+            
+    } catch (RemoteException | GroupNotFoundException e) {
+        SwingUtils.showError(this, "Error", "Failed to load members: " + e.getMessage());
+    }
+}
+
+private void joinGroup(String groupName) {
+    try {
+        client.joinGroup(groupName);
+        SwingUtils.showInfo(this, "Success", "Joined group: " + groupName);
+    } catch (Exception e) {
+        SwingUtils.showError(this, "Error", "Failed to join group: " + e.getMessage());
+    }
+}
+
+private void leaveGroup(String groupName) {
+    int confirm = JOptionPane.showConfirmDialog(this,
+        "Are you sure you want to leave '" + groupName + "'?",
+        "Confirm Leave",
+        JOptionPane.YES_NO_OPTION);
+        
+    if (confirm == JOptionPane.YES_OPTION) {
+        try {
+            client.leaveGroup(client.getUsername(), groupName);
+            SwingUtils.showInfo(this, "Success", "Left group: " + groupName);
+        } catch (Exception e) {
+            SwingUtils.showError(this, "Error", "Failed to leave group: " + e.getMessage());
+        }
+    }
+}
 
     private void addMessageToChat(Message message) {
         boolean isOwnMessage = message.getSender().equals(client.getUsername());
-        MessageBubble bubble = new MessageBubble(message, isOwnMessage);
+        MessageBubble bubble = new MessageBubble(message, isOwnMessage, msg -> {
+            deleteMessage(msg);
+        });
+
+        // Add reply handler
+        if (!message.getSender().equals("System") && !message.getSender().equals(client.getUsername())) {
+            bubble.addReplyHandler(msg -> {
+                if (message.getType() == MessageType.GROUP) {
+                    openGroupChatWithReply(msg);
+                } else {
+                    openPrivateChatWithReply(msg);
+                }
+            });
+        }
 
         chatMessagesPanel.add(bubble);
         chatMessagesPanel.add(Box.createVerticalStrut(5));
         chatMessagesPanel.revalidate();
 
-        // Auto-scroll to bottom
         SwingUtilities.invokeLater(() -> {
             JScrollBar vertical = chatScrollPane.getVerticalScrollBar();
             vertical.setValue(vertical.getMaximum());
         });
     }
+
+    private void openGroupChatWithReply(Message message) {
+        String groupName = message.getRecipient();
+
+        // Open group chat window
+        GroupChatFrame chatFrame = new GroupChatFrame(client, groupName);
+        chatFrame.setVisible(true);
+
+        // Start the reply
+        chatFrame.startReply(message);
+    }
+
+    private void openPrivateChatWithReply(Message message) {
+        String sender = message.getSender();
+
+        // Open or get existing private chat
+        PrivateChatFrame chatFrame = privateChats.get(sender);
+        if (chatFrame == null) {
+            chatFrame = new PrivateChatFrame(client, sender);
+            privateChats.put(sender, chatFrame);
+        }
+
+        // Show the window
+        chatFrame.setVisible(true);
+        chatFrame.toFront();
+
+        // Start the reply
+        chatFrame.startReply(message);
+    }
+
+    private void deleteMessage(Message message) {
+        try {
+            client.deleteMessage(message.getId(), client.getUsername());
+
+            // Remove from UI
+            displayedMessageIds.remove(message.getId());
+            refreshChatMessages();
+
+        } catch (RemoteException e) {
+            SwingUtils.showError(this, "Error", "Failed to delete message: " + e.getMessage());
+        }
+    }
+
+    // Add refresh method:
+    private void refreshChatMessages() {
+        chatMessagesPanel.removeAll();
+        loadMessageHistory();
+    }
+
+    // Add delete listener in setupCallbacks:
 
     private void sendMessage() {
         String content = inputField.getText().trim();
@@ -664,50 +911,74 @@ private void clearStatus() {
         });
 
         client.getCallbackImpl().addStatusChangeListener(event -> {
-        SwingUtilities.invokeLater(() -> {
-            // Refresh user list to show updated status
-            try {
-                List<User> allUsers = client.getAllUsers();
-                onlineUserPanel.updateUsers(allUsers);
-            } catch (RemoteException e) {
-                // Ignore
-            }
-            
-            // Show notification
-            if (!event.getUsername().equals(client.getUsername())) {
-                String status = event.getNewStatus();
-                if (status != null && !status.isEmpty()) {
-                    // Could show a small toast notification here
-                    System.out.println(event.getUsername() + " set status to: " + status);
+            SwingUtilities.invokeLater(() -> {
+                // Refresh user list to show updated status
+                try {
+                    List<User> allUsers = client.getAllUsers();
+                    onlineUserPanel.updateUsers(allUsers);
+                } catch (RemoteException e) {
+                    // Ignore
                 }
-            }
+
+                // Show notification
+                if (!event.getUsername().equals(client.getUsername())) {
+                    String status = event.getNewStatus();
+                    if (status != null && !status.isEmpty()) {
+                        // Could show a small toast notification here
+                        System.out.println(event.getUsername() + " set status to: " + status);
+                    }
+                }
+            });
         });
-    });
+
+        client.getCallbackImpl().addDeleteListener(messageId -> {
+            SwingUtilities.invokeLater(() -> {
+                if (displayedMessageIds.remove(messageId)) {
+                    refreshChatMessages();
+                }
+            });
+        });
 
         SwingUtilities.invokeLater(() -> {
             loadMessageHistory();
         });
     }
 
-    // Add new method to load history
-    private void loadMessageHistory() {
-        try {
-            List<Message> history = client.getRecentMessages(client.getUsername(), HISTORY_LIMIT);
-            for (Message msg : history) {
-                if (!displayedMessageIds.contains(msg.getId())) {
-                    displayedMessageIds.add(msg.getId());
-                    addMessageToChat(msg);
-                }
+private void loadMessageHistory() {
+    try {
+        List<Message> allMessages = new ArrayList<>();
+        
+        // Get broadcast/system messages
+        List<Message> broadcastHistory = client.getRecentMessages(client.getUsername(), HISTORY_LIMIT);
+        allMessages.addAll(broadcastHistory);
+        
+        // Get recent private messages involving this user
+        List<Message> privateHistory = client.getRecentPrivateMessages(client.getUsername(), HISTORY_LIMIT);
+        allMessages.addAll(privateHistory);
+        
+        // Get recent group messages for groups this user is a member of
+        List<Message> groupHistory = client.getRecentGroupMessages(client.getUsername(), HISTORY_LIMIT);
+        allMessages.addAll(groupHistory);
+        
+        // Sort all messages by timestamp (oldest first)
+        allMessages.sort((m1, m2) -> m1.getTimestamp().compareTo(m2.getTimestamp()));
+        
+        // Display messages in chronological order
+        for (Message msg : allMessages) {
+            if (!displayedMessageIds.contains(msg.getId())) {
+                displayedMessageIds.add(msg.getId());
+                addMessageToChat(msg);
             }
-
-            // Show placeholder if no messages
-            if (displayedMessageIds.isEmpty()) {
-                showPlaceholder("No messages yet. Start chatting!");
-            }
-        } catch (RemoteException e) {
-            System.err.println("Failed to load message history: " + e.getMessage());
         }
+        
+        // Show placeholder if no messages
+        if (displayedMessageIds.isEmpty()) {
+            showPlaceholder("No messages yet. Start chatting!");
+        }
+    } catch (RemoteException e) {
+        System.err.println("Failed to load message history: " + e.getMessage());
     }
+}
 
     // Add placeholder method
     private void showPlaceholder(String text) {
@@ -722,6 +993,23 @@ private void clearStatus() {
         if (onlineCountLabel != null) {
             onlineCountLabel.setText(count + " online now");
         }
+    }
+
+    private void showProfileDialog(User user) {
+        String status = user.getStatus() == UserStatus.ONLINE ? "🟢 Online" : "⚪ Offline";
+        String lastSeen = user.getLastSeen() != null
+                ? "Last seen: "
+                        + user.getLastSeen().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+                : "";
+
+        String message = String.format(
+                "Username: %s\nStatus: %s\n%s\nJoined: %s",
+                user.getUsername(),
+                status,
+                lastSeen,
+                user.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+
+        JOptionPane.showMessageDialog(this, message, "User Profile", JOptionPane.INFORMATION_MESSAGE);
     }
 
 }

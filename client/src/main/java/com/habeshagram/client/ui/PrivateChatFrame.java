@@ -1,7 +1,6 @@
 package com.habeshagram.client.ui;
 
 import com.habeshagram.client.core.ChatClient;
-import com.habeshagram.client.ui.components.MessageBubble;
 import com.habeshagram.common.model.*;
 
 import javax.swing.*;
@@ -9,11 +8,11 @@ import java.awt.*;
 import java.awt.event.*;
 import java.rmi.RemoteException;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.HashSet;
 import java.util.List;
 
-import com.habeshagram.client.ui.components.ModernButton;
-import com.habeshagram.client.ui.components.EmojiPicker;
+import com.habeshagram.client.ui.components.*;
 import com.habeshagram.client.ui.theme.ModernTheme;
 import java.awt.geom.RoundRectangle2D;
 
@@ -33,6 +32,10 @@ public class PrivateChatFrame extends JFrame {
     private JLabel typingLabel;
     private Timer typingTimer;
     private Boolean isTyping = false;
+    private Message replyingTo = null;
+private ReplyIndicator replyIndicator;
+private JPanel inputContainer;
+private Consumer<Message> onReplyCallback;
     
     public PrivateChatFrame(ChatClient client, String recipient) {
         this.client = client;
@@ -43,14 +46,14 @@ public class PrivateChatFrame extends JFrame {
 
         addWindowFocusListener(new WindowAdapter() {
             @Override
-            public void windowGainedFocus(java.awt.event.WindowEvent e) {
+            public void windowGainedFocus(WindowEvent e) {
                 hasFocus = true;
                 unreadCount = 0;
                 updateTitle();
             }
 
             @Override
-            public void windowLostFocus(java.awt.event.WindowEvent e) {
+            public void windowLostFocus(WindowEvent e) {
                 hasFocus = false;
             }
         });
@@ -59,7 +62,7 @@ public class PrivateChatFrame extends JFrame {
 private void initializeUI() {
     ModernTheme.applyTheme();
     setTitle("Private Chat - " + recipient);
-    setSize(450, 600);
+    setSize(600, 800);
     getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
     
     JPanel mainPanel = new JPanel(new BorderLayout());
@@ -89,6 +92,7 @@ private void initializeUI() {
     scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
     scrollPane.setBorder(null);
     scrollPane.getViewport().setBackground(ModernTheme.BACKGROUND_CHAT);
+    scrollPane.getVerticalScrollBar().setUnitIncrement(16);
     
     // Typing indicator label
     typingLabel = new JLabel(" ");
@@ -97,12 +101,77 @@ private void initializeUI() {
     typingLabel.setHorizontalAlignment(SwingConstants.CENTER);
     typingLabel.setBorder(BorderFactory.createEmptyBorder(4, 16, 4, 16));
     
-    // Input area
+    // Create input container (holds reply indicator + typing label + input panel)
+    inputContainer = new JPanel(new BorderLayout());
+    inputContainer.setBackground(ModernTheme.BACKGROUND_DARK);
+    
+    // Create input panel
+    JPanel inputPanel = createInputPanel();
+    
+    // Add components to input container in correct order
+    // Reply indicator will be added here dynamically when replying
+    inputContainer.add(typingLabel, BorderLayout.NORTH);
+    inputContainer.add(inputPanel, BorderLayout.SOUTH);
+    
+    mainPanel.add(scrollPane, BorderLayout.CENTER);
+    mainPanel.add(inputContainer, BorderLayout.SOUTH);  // FIXED: Add inputContainer, not inputPanel
+    
+    add(mainPanel);
+    setLocationRelativeTo(null);
+    
+    // Add Escape key listener to cancel reply
+    inputField.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_ESCAPE && replyingTo != null) {
+                cancelReply();
+            }
+        }
+    });
+    
+    // Add typing indicator key listener
+    inputField.addKeyListener(new KeyAdapter() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (!isTyping) {
+                isTyping = true;
+                try {
+                    client.sendTypingIndicator(client.getUsername(), recipient);
+                } catch (RemoteException ex) {
+                    // Ignore
+                }
+                
+                // Reset typing flag after 1 second
+                new Timer(1000, evt -> isTyping = false).start();
+            }
+        }
+    });
+    
+    addWindowListener(new WindowAdapter() {
+        @Override
+        public void windowClosing(WindowEvent e) {
+            dispose();
+        }
+    });
+}
+
+private JPanel createInputPanel() {
     JPanel inputPanel = new JPanel(new BorderLayout(10, 0));
     inputPanel.setBackground(ModernTheme.BACKGROUND_DARK);
     inputPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
     
-    // Create input field FIRST
+    JPanel leftInputPanel = new JPanel(new BorderLayout(5, 0));
+    leftInputPanel.setOpaque(false);
+    
+    ModernButton emojiButton = new ModernButton("😊");
+    emojiButton.setPreferredSize(new Dimension(45, 40));
+    emojiButton.addActionListener(e -> {
+        EmojiPicker picker = new EmojiPicker(emoji -> {
+            inputField.setText(inputField.getText() + emoji);
+        });
+        picker.show(emojiButton, 0, -picker.getPreferredSize().height);
+    });
+    
     inputField = new JTextField() {
         @Override
         protected void paintComponent(Graphics g) {
@@ -121,66 +190,19 @@ private void initializeUI() {
     inputField.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
     inputField.addActionListener(e -> sendMessage());
     
-    // NOW add the KeyListener AFTER inputField is created
-    inputField.addKeyListener(new KeyAdapter() {
-        @Override
-        public void keyPressed(KeyEvent e) {
-            if (!isTyping) {
-                isTyping = true;
-                try {
-                    client.sendTypingIndicator(client.getUsername(), recipient);
-                } catch (RemoteException ex) {
-                    // Ignore
-                }
-                
-                // Reset typing flag after 1 second
-                new Timer(1000, evt -> isTyping = false).start();
-            }
-        }
-    });
-    
-    // Left input panel with emoji button
-    JPanel leftInputPanel = new JPanel(new BorderLayout(5, 0));
-    leftInputPanel.setOpaque(false);
-    
-    ModernButton emojiButton = new ModernButton("😊");
-    emojiButton.setPreferredSize(new Dimension(45, 40));
-    emojiButton.addActionListener(e -> {
-        EmojiPicker picker = new EmojiPicker(emoji -> {
-            inputField.setText(inputField.getText() + emoji);
-        });
-        picker.show(emojiButton, 0, -picker.getPreferredSize().height);
-    });
-    
     leftInputPanel.add(emojiButton, BorderLayout.WEST);
     leftInputPanel.add(inputField, BorderLayout.CENTER);
     
     ModernButton sendButton = new ModernButton("Send");
     sendButton.setPreferredSize(new Dimension(80, 40));
     sendButton.addActionListener(e -> sendMessage());
-    
+
     inputPanel.add(leftInputPanel, BorderLayout.CENTER);
     inputPanel.add(sendButton, BorderLayout.EAST);
     
-    // Add typing label above input
-    JPanel bottomPanel = new JPanel(new BorderLayout());
-    bottomPanel.setBackground(ModernTheme.BACKGROUND_DARK);
-    bottomPanel.add(typingLabel, BorderLayout.NORTH);
-    bottomPanel.add(inputPanel, BorderLayout.CENTER);
-    
-    mainPanel.add(scrollPane, BorderLayout.CENTER);
-    mainPanel.add(bottomPanel, BorderLayout.SOUTH);
-    
-    add(mainPanel);
-    setLocationRelativeTo(null);
-    
-    addWindowListener(new WindowAdapter() {
-        @Override
-        public void windowClosing(WindowEvent e) {
-            dispose();
-        }
-    });
+    return inputPanel;  // Return just the input panel, not a wrapper
 }
+
 
 private JPanel createHeaderPanel() {
     JPanel header = new JPanel(new BorderLayout());
@@ -260,6 +282,14 @@ private void setupCallback() {
         }
     });
 
+client.getCallbackImpl().addDeleteListener(messageId -> {
+    SwingUtilities.invokeLater(() -> {
+        if (displayedMessageIds.remove(messageId)) {
+            refreshChatMessages();
+        }
+    });
+});
+
     SwingUtilities.invokeLater(() -> {
         loadConversationHistory();
     });
@@ -297,42 +327,112 @@ private void updateTitle() {
     }
     
     private void addMessageToUI(Message message) {
-        placeholderLabel.setVisible(false);
-        
-        boolean isOwnMessage = message.getSender().equals(client.getUsername());
-        MessageBubble bubble = new MessageBubble(message, isOwnMessage);
-        
-
-        int insertPosition = messagesPanel.getComponentCount() - 1; // Before the vertical glue
-        messagesPanel.add(bubble, insertPosition);
-        messagesPanel.add(Box.createVerticalStrut(5), insertPosition + 1);
-        messagesPanel.revalidate();
-        messagesPanel.repaint();
-        
-        // Auto-scroll to bottom
-        SwingUtilities.invokeLater(() -> {
-            JScrollBar vertical = scrollPane.getVerticalScrollBar();
-            vertical.setValue(vertical.getMaximum());
-        });
-    }
+    placeholderLabel.setVisible(false);
+    
+    boolean isOwnMessage = message.getSender().equals(client.getUsername());
+    MessageBubble bubble = new MessageBubble(message, isOwnMessage, msg -> {
+        deleteMessage(msg);
+    });
+    
+    // Add reply handler
+    bubble.addReplyHandler(msg -> {
+        startReply(msg);
+    });
+    
+    // Rest of existing addMessageToUI code...
+    int insertPosition = messagesPanel.getComponentCount() - 1;
+    messagesPanel.add(bubble, insertPosition);
+    messagesPanel.add(Box.createVerticalStrut(5), insertPosition + 1);
+    
+    messagesPanel.revalidate();
+    messagesPanel.repaint();
+    
+    SwingUtilities.invokeLater(() -> {
+        JScrollBar vertical = scrollPane.getVerticalScrollBar();
+        vertical.setValue(vertical.getMaximum());
+    });
+}
     
     private void updatePlaceholder() {
         placeholderLabel.setVisible(displayedMessageIds.isEmpty());
     }
     
-    private void sendMessage() {
-        String content = inputField.getText().trim();
-        if (!content.isEmpty()) {
-            try {
+private void sendMessage() {
+    String content = inputField.getText().trim();
+    if (!content.isEmpty()) {
+        try {
+            if (replyingTo != null) {
+                client.sendPrivateReply(recipient, content,
+                    replyingTo.getId(),
+                    replyingTo.getSender(),
+                    replyingTo.getContent());
+                cancelReply();
+            } else {
                 client.sendPrivate(recipient, content);
-                inputField.setText("");
-            } catch (RemoteException e) {
-                JOptionPane.showMessageDialog(this, 
-                    "Failed to send message: " + e.getMessage(), 
-                    "Error", JOptionPane.ERROR_MESSAGE);
             }
+            inputField.setText("");
+        } catch (RemoteException e) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to send message: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+}
+
+    private void deleteMessage(Message message) {
+    try {
+        client.deleteMessage(message.getId(), client.getUsername());
+        displayedMessageIds.remove(message.getId());
+        refreshChatMessages();
+    } catch (RemoteException e) {
+        JOptionPane.showMessageDialog(this, 
+            "Failed to delete message: " + e.getMessage(), 
+            "Error", JOptionPane.ERROR_MESSAGE);
+    }
+}
+
+private void refreshChatMessages() {
+    messagesPanel.removeAll();
+    messagesPanel.add(Box.createVerticalGlue());
+    messagesPanel.add(placeholderLabel);
+    displayedMessageIds.clear();
+    loadConversationHistory();
+    messagesPanel.revalidate();
+    messagesPanel.repaint();
+}
+
+public void startReply(Message message) {
+    this.replyingTo = message;
+    
+    // Remove old indicator if exists
+    if (replyIndicator != null) {
+        inputContainer.remove(replyIndicator);
+    }
+    
+    // Create new indicator
+    replyIndicator = new ReplyIndicator(message, this::cancelReply);
+    inputContainer.add(replyIndicator, BorderLayout.NORTH);
+    inputContainer.revalidate();
+    inputContainer.repaint();
+    
+    // Change placeholder
+    inputField.putClientProperty("JTextField.placeholderText", "Type your reply...");
+    inputField.requestFocus();
+}
+
+private void cancelReply() {
+    this.replyingTo = null;
+    
+    if (replyIndicator != null) {
+        inputContainer.remove(replyIndicator);
+        replyIndicator = null;
+        inputContainer.revalidate();
+        inputContainer.repaint();
+    }
+    
+    inputField.putClientProperty("JTextField.placeholderText", "Type a message...");
+    inputField.repaint();
+}
 
 private void playNotificationSound() {
     Toolkit.getDefaultToolkit().beep();

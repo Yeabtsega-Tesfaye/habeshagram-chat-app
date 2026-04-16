@@ -2,6 +2,7 @@ package com.habeshagram.client.ui.components;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -10,24 +11,40 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.geom.RoundRectangle2D;
 import java.time.format.DateTimeFormatter;
+import java.util.function.Consumer;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.border.EmptyBorder;
+import java.awt.event.MouseEvent;
 
 import com.habeshagram.client.ui.theme.ModernTheme;
 import com.habeshagram.common.model.Message;
 import com.habeshagram.common.model.MessageType;
 
+import com.habeshagram.client.ui.components.ContextMenuFactory;
+import java.awt.event.MouseAdapter;
+
 public class MessageBubble extends JPanel {
     private static final int MAX_BUBBLE_WIDTH = 400;
     private static final int BUBBLE_PADDING = 12;
+    private Message message;
+    private boolean isOwnMessage;
+    private Consumer<Message> onDelete;
+    private Consumer<Message> onReply;
     
-    public MessageBubble(Message message, boolean isOwnMessage) {
+    public MessageBubble(Message message, boolean isOwnMessage, Consumer<Message> onDelete) {
         setLayout(new BorderLayout());
         setOpaque(false);
+
+        this.message = message;
+        this.isOwnMessage = isOwnMessage;
+        this.onReply = null; // Will set later if needed
+        this.onDelete = onDelete;
         
         JPanel bubblePanel = createBubblePanel(message, isOwnMessage);
         
@@ -52,8 +69,82 @@ public class MessageBubble extends JPanel {
             wrapper.add(bubblePanel);
             add(wrapper, BorderLayout.CENTER);
         }
+
+        addRightClickListener(bubblePanel);
     }
+
+private void addRightClickListener(JPanel bubblePanel) {
+    bubblePanel.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+            if (e.isPopupTrigger()) {
+                showContextMenu(e);
+            }
+        }
+        
+        @Override
+        public void mouseReleased(MouseEvent e) {
+            if (e.isPopupTrigger()) {
+                showContextMenu(e);
+            }
+        }
+    });
+
+    for (Component comp : bubblePanel.getComponents()) {
+        comp.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
+            }
+            
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
+            }
+        });
+    }
+}
+
+private void showContextMenu(MouseEvent e) {
+    JPopupMenu menu = ContextMenuFactory.createMessageMenu(
+        message,
+        isOwnMessage,
+        action -> {
+            switch (action) {
+                case COPY:
+                    ContextMenuFactory.showToast(this, "Copied to clipboard!");
+                    break;
+                case DELETE:
+                    int confirm = JOptionPane.showConfirmDialog(
+                        this,
+                        "Delete this message?",
+                        "Confirm Delete",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE
+                    );
+                    if (confirm == JOptionPane.YES_OPTION) {
+                        if (onDelete != null) {
+                            onDelete.accept(message);
+                        }
+                    }
+                    break;
+                case REPLY:
+                    // This should now be called!
+                    if (onReply != null) {
+                        onReply.accept(message);
+                    }
+                    break;
+            }
+        }
+    );
     
+    menu.show(e.getComponent(), e.getX(), e.getY());
+}
+
 private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
     JPanel panel = new JPanel() {
         @Override
@@ -76,6 +167,16 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
     panel.setOpaque(false);
     panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
     panel.setBorder(new EmptyBorder(BUBBLE_PADDING, BUBBLE_PADDING, BUBBLE_PADDING, BUBBLE_PADDING));
+
+    // Reply preview
+    if (message.isReply()) {
+        ReplyBubble replyPreview = new ReplyBubble(
+            message.getReplyToSender(), 
+            message.getReplyToContent()
+        );
+        replyPreview.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(replyPreview);
+    }
     
     // Header for non-system messages
     if (message.getType() != MessageType.SYSTEM) {
@@ -122,7 +223,16 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
                                     + message.getContent().replaceAll("\n", "<br>") + "</div></html>");
     contentLabel.setFont(ModernTheme.FONT_MESSAGE);
     contentLabel.setForeground(ModernTheme.TEXT_PRIMARY);
+    contentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
     panel.add(contentLabel);
+    
+    // ADD FOOTER FOR SYSTEM MESSAGES (since they don't have header with time)
+    if (message.getType() == MessageType.SYSTEM) {
+        panel.add(Box.createVerticalStrut(4));
+        JPanel footerPanel = createFooter(message, isOwnMessage);
+        footerPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        panel.add(footerPanel);
+    }
     
     // Calculate preferred size
     int width = Math.min(MAX_BUBBLE_WIDTH, panel.getPreferredSize().width);
@@ -131,7 +241,7 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
     return panel;
 }
     
-    private Color getBubbleColor(Message message, boolean isOwnMessage) {
+  private Color getBubbleColor(Message message, boolean isOwnMessage) {
         if (message.getType() == MessageType.SYSTEM) {
             return ModernTheme.BUBBLE_SYSTEM;
         } else if (isOwnMessage) {
@@ -185,15 +295,30 @@ private JPanel createHeader(Message message, boolean isOwnMessage) {
     return header;
 }
     
-    private JPanel createFooter(Message message, boolean isOwnMessage) {
-        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+private JPanel createFooter(Message message, boolean isOwnMessage) {
+    JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+    footer.setOpaque(false);
+    
+    JLabel timeLabel = new JLabel(message.getFormattedTime());
+    timeLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(10f));
+    
+    if (message.getType() == MessageType.SYSTEM) {
+        timeLabel.setForeground(ModernTheme.TEXT_MUTED);
+        // Center the time for system messages
+        footer = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 0));
         footer.setOpaque(false);
-        
-        JLabel timeLabel = new JLabel(message.getFormattedTime());
-        timeLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(10f));
-        timeLabel.setForeground(isOwnMessage ? new Color(255, 255, 255, 180) : ModernTheme.TEXT_MUTED);
-        footer.add(timeLabel);
-        
-        return footer;
+    } else if (isOwnMessage) {
+        timeLabel.setForeground(new Color(255, 255, 255, 180));
+    } else {
+        timeLabel.setForeground(ModernTheme.TEXT_MUTED);
+    }
+    
+    footer.add(timeLabel);
+    
+    return footer;
+}
+
+    public void addReplyHandler(Consumer<Message> handler) {
+        this.onReply = handler;
     }
 }

@@ -13,6 +13,8 @@ public interface IClientCallback extends Remote {
     void receiveGroupUpdate(String groupName, String message) throws RemoteException;
 
     void userTyping(String username, String recipient) throws RemoteException;
-    // Add this method
-void userStatusMessageChanged(String username, String newStatus) throws RemoteException;
+
+    void userStatusMessageChanged(String username, String newStatus) throws RemoteException;
+
+    void messageDeleted(String messageId) throws RemoteException;
 }

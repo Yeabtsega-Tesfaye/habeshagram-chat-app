@@ -51,3 +51,8 @@ CREATE TABLE IF NOT EXISTS message_deliveries (
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_message_deliveries_recipient ON message_deliveries(recipient_username);
 CREATE INDEX IF NOT EXISTS idx_message_deliveries_undelivered ON message_deliveries(recipient_username, delivered);
+
+
+-- ALTER TABLE messages ADD COLUMN reply_to_id TEXT;
+-- ALTER TABLE messages ADD COLUMN reply_to_sender TEXT;
+-- ALTER TABLE messages ADD COLUMN reply_to_content TEXT;

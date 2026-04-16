@@ -123,4 +123,28 @@ public void setUserStatus(String username, String status) throws RemoteException
 public String getUserStatus(String username) throws RemoteException {
     return server.getUserStatus(username);
 }
+
+public void deleteMessage(String messageId, String username) throws RemoteException {
+    server.deleteMessage(messageId, username);
+}
+
+public void sendPrivateReply(String recipient, String content,
+                             String replyToId, String replyToSender, String replyToContent) 
+                             throws RemoteException {
+    server.sendPrivateReply(username, recipient, content, replyToId, replyToSender, replyToContent);
+}
+
+public void sendGroupReply(String groupName, String content,
+                           String replyToId, String replyToSender, String replyToContent) 
+                           throws RemoteException {
+    server.sendGroupReply(username, groupName, content, replyToId, replyToSender, replyToContent);
+}
+
+public List<Message> getRecentPrivateMessages(String username, int limit) throws RemoteException {
+    return server.getRecentPrivateMessages(username, limit);
+}
+
+public List<Message> getRecentGroupMessages(String username, int limit) throws RemoteException {
+    return server.getRecentGroupMessages(username, limit);
+}
 }

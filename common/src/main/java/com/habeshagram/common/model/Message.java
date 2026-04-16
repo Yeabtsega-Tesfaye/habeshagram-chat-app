@@ -11,9 +11,12 @@ public class Message implements Serializable {
     private String id;
     private MessageType type;
     private String sender;
-    private String recipient; // username for PRIVATE, group name for GROUP, null for BROADCAST
+    private String recipient;
     private String content;
     private LocalDateTime timestamp;
+    private String replyToId;
+    private String replyToSender;
+    private String replyToContent;
     
     public Message() {
         this.id = UUID.randomUUID().toString();
@@ -50,6 +53,19 @@ public class Message implements Serializable {
     
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+    
+    public String getReplyToId() { return replyToId; }
+    public void setReplyToId(String replyToId) { this.replyToId = replyToId; }
+    
+    public String getReplyToSender() { return replyToSender; }
+    public void setReplyToSender(String replyToSender) { this.replyToSender = replyToSender; }
+    
+    public String getReplyToContent() { return replyToContent; }
+    public void setReplyToContent(String replyToContent) { this.replyToContent = replyToContent; }
+    
+    public boolean isReply() { 
+        return replyToId != null && !replyToId.isEmpty(); 
+    }
     
     public String getFormattedTime() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");

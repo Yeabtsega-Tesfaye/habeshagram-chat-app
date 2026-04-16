@@ -18,12 +18,13 @@ public class ClientCallbackImpl implements IClientCallback {
 private List<Consumer<StatusChangeEvent>> statusChangeListeners = new ArrayList<>();
 
    
-    @Override
-    public void receiveMessage(Message msg) throws RemoteException {
-        for (Consumer<Message> listener : messageListeners) {
-            listener.accept(msg);
-        }
+// In ClientCallbackImpl.receiveMessage()
+@Override
+public void receiveMessage(Message msg) throws RemoteException {
+    for (Consumer<Message> listener : messageListeners) {
+        listener.accept(msg);
     }
+}
     
     @Override
     public void userStatusChanged(String username, UserStatus status) throws RemoteException {
@@ -89,4 +90,17 @@ public static class StatusChangeEvent {
     public String getUsername() { return username; }
     public String getNewStatus() { return newStatus; }
 } 
+
+private List<Consumer<String>> deleteListeners = new ArrayList<>();
+
+@Override
+public void messageDeleted(String messageId) throws RemoteException {
+    for (Consumer<String> listener : deleteListeners) {
+        listener.accept(messageId);
+    }
+}
+
+public void addDeleteListener(Consumer<String> listener) {
+    deleteListeners.add(listener);
+}
 }

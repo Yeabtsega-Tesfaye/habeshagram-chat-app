@@ -7,7 +7,10 @@ import com.habeshagram.client.ui.theme.ModernTheme;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.function.Consumer;
@@ -19,32 +22,50 @@ public class OnlineUserPanel extends JPanel {
     private JTextField searchField;
     private List<User> allUsers = new ArrayList<>();
     private Consumer<String> onStatusChanged;
-    
+    private Consumer<User> onMessageUser;
+    private Consumer<User> onViewProfile;
+
+    public void setOnMessageUser(Consumer<User> handler) {
+        this.onMessageUser = handler;
+    }
+
+    public void setOnViewProfile(Consumer<User> handler) {
+        this.onViewProfile = handler;
+    }
+
     public OnlineUserPanel() {
         setLayout(new BorderLayout());
         setBorder(BorderFactory.createTitledBorder("All Users"));
-        
+
         // Create search panel with label
         JPanel searchPanel = new JPanel(new BorderLayout());
         JLabel searchLabel = new JLabel("🔍");
         searchLabel.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
-        
+
         searchField = new JTextField();
-        
+
         // Add document listener
         searchField.getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(DocumentEvent e) { filterUsers(); }
+            public void insertUpdate(DocumentEvent e) {
+                filterUsers();
+            }
+
             @Override
-            public void removeUpdate(DocumentEvent e) { filterUsers(); }
+            public void removeUpdate(DocumentEvent e) {
+                filterUsers();
+            }
+
             @Override
-            public void changedUpdate(DocumentEvent e) { filterUsers(); }
+            public void changedUpdate(DocumentEvent e) {
+                filterUsers();
+            }
         });
-        
+
         searchPanel.add(searchLabel, BorderLayout.WEST);
         searchPanel.add(searchField, BorderLayout.CENTER);
         searchPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        
+
         userListModel = new DefaultListModel<>();
         userList = new JList<>(userListModel);
         userList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -52,23 +73,39 @@ public class OnlineUserPanel extends JPanel {
         userList.setBackground(ModernTheme.BACKGROUND_MEDIUM);
         userList.setSelectionBackground(ModernTheme.PRIMARY);
         userList.setSelectionForeground(Color.WHITE);
-        
+
+        userList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showContextMenu(e);
+                }
+            }
+        });
+
         JScrollPane scrollPane = new JScrollPane(userList);
-        
+
         add(searchPanel, BorderLayout.NORTH);
         add(scrollPane, BorderLayout.CENTER);
-        
+
         setPreferredSize(new Dimension(200, 0));
     }
-    
+
     public void updateUsers(List<User> users) {
         this.allUsers = users;
         filterUsers();
     }
-    
+
     private void filterUsers() {
         String searchText = searchField.getText().toLowerCase().trim();
-        
+
         List<User> filteredUsers;
         if (searchText.isEmpty()) {
             filteredUsers = allUsers;
@@ -80,18 +117,18 @@ public class OnlineUserPanel extends JPanel {
                 }
             }
         }
-        
+
         userListModel.clear();
         for (User user : filteredUsers) {
             userListModel.addElement(user);
         }
     }
-    
+
     public String getSelectedUser() {
         User selected = userList.getSelectedValue();
         return selected != null ? selected.getUsername() : null;
     }
-    
+
     public void addUserSelectionListener(java.awt.event.MouseListener listener) {
         userList.addMouseListener(listener);
     }
@@ -99,15 +136,15 @@ public class OnlineUserPanel extends JPanel {
     public void setOnStatusChanged(Consumer<String> callback) {
         this.onStatusChanged = callback;
     }
-    
+
     private class UserListCellRenderer extends DefaultListCellRenderer {
         @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value, 
-                                                     int index, boolean isSelected, 
-                                                     boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<?> list, Object value,
+                int index, boolean isSelected,
+                boolean cellHasFocus) {
             JLabel label = (JLabel) super.getListCellRendererComponent(
-                list, value, index, isSelected, cellHasFocus);
-            
+                    list, value, index, isSelected, cellHasFocus);
+
             if (value instanceof User) {
                 User user = (User) value;
 
@@ -118,7 +155,7 @@ public class OnlineUserPanel extends JPanel {
                 }
 
                 label.setText(displayText.toString());
-                
+
                 // Simple tooltip - just text, let Swing handle styling
                 if (user.getStatus() == UserStatus.ONLINE) {
                     label.setIcon(createOnlineIcon());
@@ -132,7 +169,7 @@ public class OnlineUserPanel extends JPanel {
                         label.setToolTipText("Offline  " + user.getStatusText());
                     }
                 }
-                
+
                 // Colors
                 if (isSelected) {
                     label.setBackground(ModernTheme.PRIMARY);
@@ -145,22 +182,22 @@ public class OnlineUserPanel extends JPanel {
                         label.setForeground(new Color(160, 160, 160));
                     }
                 }
-                
+
                 // Icon
                 if (user.getStatus() == UserStatus.ONLINE) {
                     label.setIcon(createOnlineIcon());
                 } else {
                     label.setIcon(createOfflineIcon());
                 }
-                
+
                 label.setOpaque(true);
                 label.setIconTextGap(8);
                 label.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
             }
-            
+
             return label;
         }
-        
+
         private Icon createOnlineIcon() {
             return new Icon() {
                 @Override
@@ -171,13 +208,19 @@ public class OnlineUserPanel extends JPanel {
                     g2.fillOval(x, y + 2, 10, 10);
                     g2.dispose();
                 }
+
                 @Override
-                public int getIconWidth() { return 10; }
+                public int getIconWidth() {
+                    return 10;
+                }
+
                 @Override
-                public int getIconHeight() { return 14; }
+                public int getIconHeight() {
+                    return 14;
+                }
             };
         }
-        
+
         private Icon createOfflineIcon() {
             return new Icon() {
                 @Override
@@ -188,11 +231,50 @@ public class OnlineUserPanel extends JPanel {
                     g2.fillOval(x, y + 2, 10, 10);
                     g2.dispose();
                 }
+
                 @Override
-                public int getIconWidth() { return 10; }
+                public int getIconWidth() {
+                    return 10;
+                }
+
                 @Override
-                public int getIconHeight() { return 14; }
+                public int getIconHeight() {
+                    return 14;
+                }
             };
+        }
+    }
+
+    private void showContextMenu(MouseEvent e) {
+        int index = userList.locationToIndex(e.getPoint());
+        if (index >= 0) {
+            userList.setSelectedIndex(index);
+            User selectedUser = userList.getSelectedValue();
+
+            if (selectedUser != null) {
+                JPopupMenu menu = ContextMenuFactory.createUserMenu(
+                        selectedUser.getUsername(),
+                        selectedUser.getStatus() == UserStatus.ONLINE,
+                        action -> {
+                            switch (action) {
+                                case MESSAGE:
+                                    if (onMessageUser != null) {
+                                        onMessageUser.accept(selectedUser);
+                                    }
+                                    break;
+                                case PROFILE:
+                                    if (onViewProfile != null) {
+                                        onViewProfile.accept(selectedUser);
+                                    }
+                                    break;
+                                case COPY_USERNAME:
+                                    ContextMenuFactory.showToast(this, "Username copied!");
+                                    break;
+                            }
+                        });
+
+                menu.show(userList, e.getX(), e.getY());
+            }
         }
     }
 }

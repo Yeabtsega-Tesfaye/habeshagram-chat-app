@@ -413,4 +413,120 @@ private void broadcastStatusChange(String username, String newStatus) {
     }
 }
 
+// Add to ServerImpl.java
+@Override
+public void deleteMessage(String messageId, String username) throws RemoteException {
+    // Verify the message belongs to the user
+    Message message = messageDAO.getMessageById(messageId);
+    if (message != null && message.getSender().equals(username)) {
+        messageDAO.deleteMessage(messageId);
+        
+        // Broadcast deletion to all relevant clients
+        broadcastMessageDeletion(messageId, message);
+    }
+}
+
+private void broadcastMessageDeletion(String messageId, Message message) {
+    // Notify all online users that message was deleted
+    for (String user : clientRegistry.getOnlineUsers()) {
+        IClientCallback callback = clientRegistry.getClient(user);
+        if (callback != null) {
+            try {
+                callback.messageDeleted(messageId);
+            } catch (RemoteException e) {
+                // Ignore
+            }
+        }
+    }
+}
+
+// Add these methods:
+
+@Override
+public void sendPrivateReply(String sender, String recipient, String content,
+                             String replyToId, String replyToSender, String replyToContent) 
+                             throws RemoteException {
+    Message message = new Message(MessageType.PRIVATE, sender, recipient, content);
+    message.setReplyToId(replyToId);
+    message.setReplyToSender(replyToSender);
+    message.setReplyToContent(replyToContent);
+    
+    // Route to sender (so they see their own message)
+    IClientCallback senderCallback = clientRegistry.getClient(sender);
+    if (senderCallback != null) {
+        try {
+            senderCallback.receiveMessage(message);
+        } catch (RemoteException e) {
+            System.err.println("Failed to deliver reply to sender: " + e.getMessage());
+        }
+    }
+    
+    // Route to recipient if online
+    if (clientRegistry.isOnline(recipient)) {
+        IClientCallback recipientCallback = clientRegistry.getClient(recipient);
+        if (recipientCallback != null) {
+            try {
+                recipientCallback.receiveMessage(message);
+            } catch (RemoteException e) {
+                System.err.println("Failed to deliver reply to recipient: " + e.getMessage());
+            }
+        }
+    }
+    
+    messageDAO.saveMessage(message);
+}
+
+@Override
+public void sendGroupReply(String sender, String groupName, String content,
+                           String replyToId, String replyToSender, String replyToContent) 
+                           throws RemoteException {
+    Group group = groupDAO.getGroup(groupName);
+    if (group == null || !group.hasMember(sender)) {
+        System.err.println("User " + sender + " attempted to reply in group " + groupName + " but is not a member");
+        return;
+    }
+    
+    // IMPORTANT: Make sure recipient is set to groupName
+    Message message = new Message(MessageType.GROUP, sender, groupName, content);
+    message.setReplyToId(replyToId);
+    message.setReplyToSender(replyToSender);
+    message.setReplyToContent(replyToContent);
+    
+    // Route to sender
+    IClientCallback senderCallback = clientRegistry.getClient(sender);
+    if (senderCallback != null) {
+        try {
+            senderCallback.receiveMessage(message);
+        } catch (RemoteException e) {
+            System.err.println("Failed to deliver reply to sender: " + e.getMessage());
+        }
+    }
+    
+    // Route to online group members
+    for (String member : group.getMembers()) {
+        if (!member.equals(sender) && clientRegistry.isOnline(member)) {
+            IClientCallback memberCallback = clientRegistry.getClient(member);
+            if (memberCallback != null) {
+                try {
+                    memberCallback.receiveMessage(message);
+                } catch (RemoteException e) {
+                    System.err.println("Failed to deliver reply to " + member + ": " + e.getMessage());
+                }
+            }
+        }
+    }
+    
+    messageDAO.saveMessage(message);
+}
+
+@Override
+public List<Message> getRecentPrivateMessages(String username, int limit) throws RemoteException {
+    return messageDAO.getRecentPrivateMessagesForUser(username, limit);
+}
+
+@Override
+public List<Message> getRecentGroupMessages(String username, int limit) throws RemoteException {
+    return messageDAO.getRecentGroupMessagesForUser(username, limit);
+}
+
 }
