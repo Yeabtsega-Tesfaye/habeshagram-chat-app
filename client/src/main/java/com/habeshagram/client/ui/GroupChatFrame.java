@@ -17,7 +17,9 @@ import com.habeshagram.client.ui.components.ModernButton;
 import com.habeshagram.client.ui.components.NewMessageDivider;
 import com.habeshagram.client.ui.components.ReplyIndicator;
 import com.habeshagram.client.ui.components.ToastNotification;
+import com.habeshagram.client.ui.components.TypingDots;
 import com.habeshagram.client.ui.theme.ModernTheme;
+import com.habeshagram.client.util.AnimationUtils;
 import com.habeshagram.client.util.SoundManager;
 import com.habeshagram.common.exception.GroupNotFoundException;
 import com.habeshagram.common.model.Message;
@@ -35,7 +37,8 @@ public class GroupChatFrame extends JFrame {
     private JLabel placeholderLabel;
     private int unreadCount = 0;
     private boolean hasFocus = false;
-    private JLabel typingLabel;
+    private TypingDots typingDots;
+    private Timer typingTimeoutTimer;
     private Timer typingTimer;
     private boolean isTyping = false;
     private Message replyingTo = null;
@@ -43,14 +46,17 @@ public class GroupChatFrame extends JFrame {
     private JPanel inputContainer;
 private boolean hasUnreadMessages = false;
 private NewMessageDivider unreadDivider;
+private boolean isFirstShow = true;
 
     public GroupChatFrame(ChatClient client, String groupName) {
         this.client = client;
         this.groupName = groupName;
+        this.hasFocus = true;
 
         initializeUI();
         setupCallback();
         loadGroupMembers();
+
 
         addWindowFocusListener(new WindowAdapter() {
             @Override
@@ -65,6 +71,21 @@ private NewMessageDivider unreadDivider;
                 hasFocus = false;
             }
         });
+    }
+
+    public void showWithAnimation() {
+        if (isFirstShow || !isVisible()) {
+            AnimationUtils.slideInFromRight(this);
+            isFirstShow = false;
+        } else {
+            setVisible(true);
+            toFront();
+        }
+    }
+    
+    @Override
+    public void dispose() {
+        super.dispose();
     }
 
 private void initializeUI() {
@@ -105,14 +126,12 @@ private void initializeUI() {
     scrollPane.setBorder(null);
     scrollPane.getViewport().setBackground(ModernTheme.BACKGROUND_CHAT);
     scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-    
-    // Typing indicator
-    typingLabel = new JLabel(" ");
-    typingLabel.setFont(ModernTheme.FONT_SMALL);
-    typingLabel.setForeground(ModernTheme.TEXT_MUTED);
-    typingLabel.setHorizontalAlignment(SwingConstants.CENTER);
-    typingLabel.setBorder(BorderFactory.createEmptyBorder(4, 16, 4, 16));
-    
+   
+    typingDots = new TypingDots("");
+    typingDots.setVisible(false);
+    typingDots.setBorder(BorderFactory.createEmptyBorder(4, 16, 4,16));
+
+
     // Input container
     inputContainer = new JPanel(new BorderLayout());
     inputContainer.setBackground(ModernTheme.BACKGROUND_DARK);
@@ -120,7 +139,7 @@ private void initializeUI() {
     // Input panel
     JPanel inputPanel = createInputPanel();
     
-    inputContainer.add(typingLabel, BorderLayout.NORTH);
+    inputContainer.add(typingDots, BorderLayout.NORTH);
     inputContainer.add(inputPanel, BorderLayout.SOUTH);
     
     chatPanel.add(scrollPane, BorderLayout.CENTER);
@@ -334,6 +353,11 @@ private JPanel createInputPanel() {
                 
                         addMessageToUI(message);
 
+                                      Component lastAdded = messagesPanel.getComponent(messagesPanel.getComponentCount() - 2);
+            if (lastAdded instanceof MessageBubble) {
+                AnimationUtils.bounce((MessageBubble) lastAdded);
+            }
+
                         if (!message.getSender().equals(client.getUsername())) {
                             SoundManager.playMessageSound();
                         }
@@ -346,21 +370,25 @@ private JPanel createInputPanel() {
         // ... existing message handling ...
     });
     
-    // Add group typing listener
-    client.getCallbackImpl().addGroupTypingListener(event -> {
-        if (event.getGroupName().equals(groupName) && !event.getUsername().equals(client.getUsername())) {
-            SwingUtilities.invokeLater(() -> {
-                typingLabel.setText(event.getUsername() + " is typing...");
-                
-                if (typingTimer != null) {
-                    typingTimer.stop();
-                }
-                typingTimer = new Timer(2000, e -> typingLabel.setText(" "));
-                typingTimer.setRepeats(false);
-                typingTimer.start();
-            });
+// Add typing listener in setupCallback():
+client.getCallbackImpl().addTypingListener(username -> {
+    SwingUtilities.invokeLater(() -> {
+        typingDots.updateUsername(username);
+        typingDots.setVisible(true);
+        typingDots.startAnimation();
+        
+        if (typingTimeoutTimer != null) {
+            typingTimeoutTimer.stop();
         }
+        
+        typingTimeoutTimer = new Timer(2500, e -> {
+            typingDots.stopAnimation();
+            typingDots.setVisible(false);
+        });
+        typingTimeoutTimer.setRepeats(false);
+        typingTimeoutTimer.start();
     });
+});
 
 
 
@@ -434,6 +462,11 @@ private void sendMessage() {
 
             updatePlaceholder();
 
+                SwingUtilities.invokeLater(() -> {
+            JScrollBar vertical = scrollPane.getVerticalScrollBar();
+            vertical.setValue(vertical.getMaximum());
+        });
+
         } catch (RemoteException e) {
             System.err.println("Failed to load group history: " + e.getMessage());
         }
@@ -456,6 +489,8 @@ private void addMessageToUI(Message message) {
         !message.getSender().equals(client.getUsername())) {
         addUnreadDivider();
     }
+
+    bubble.setVisible(false);
     
     int insertPosition = messagesPanel.getComponentCount() - 1;
     messagesPanel.add(bubble, insertPosition);
@@ -465,10 +500,58 @@ private void addMessageToUI(Message message) {
     messagesPanel.repaint();
     
     SwingUtilities.invokeLater(() -> {
+        bubble.setVisible(true);
+        fadeInMessage(bubble);
+
+    if (!isOwnMessage) {
+        Timer bounceTimer = new Timer(250, e -> {
+            AnimationUtils.bounce(bubble);
+            ((Timer) e.getSource()).stop();
+        });
+        bounceTimer.setRepeats(false);
+        bounceTimer.start();
+    }
+
+        SwingUtilities.invokeLater(() -> {
+
         JScrollBar vertical = scrollPane.getVerticalScrollBar();
         vertical.setValue(vertical.getMaximum());
     });
+
+});
   }
+
+  private void fadeInMessage(JComponent component) {
+    component.setOpaque(false);
+    
+    Timer timer = new Timer(16, null);
+    final float[] alpha = {0.0f};
+    
+    timer.addActionListener(e -> {
+        alpha[0] += 0.08f;
+        if (alpha[0] >= 1.0f) {
+            alpha[0] = 1.0f;
+            ((Timer) e.getSource()).stop();
+            component.setOpaque(true);
+        }
+        
+        applyAlpha(component, alpha[0]);
+        component.repaint();
+    });
+    
+    timer.start();
+}
+
+private void applyAlpha(Component comp, float alpha) {
+    if (comp instanceof JComponent) {
+        ((JComponent) comp).putClientProperty("fadeOpacity", alpha);
+    }
+    if (comp instanceof Container) {
+        for (Component child : ((Container) comp).getComponents()) {
+            applyAlpha(child, alpha);
+        }
+    }
+}
 
     private void deleteMessage(Message message) {
         try {

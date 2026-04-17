@@ -16,7 +16,7 @@ import com.habeshagram.client.ui.components.*;
 import com.habeshagram.client.ui.theme.ModernTheme;
 import java.awt.geom.RoundRectangle2D;
 
-import com.habeshagram.client.util.SoundManager;
+import com.habeshagram.client.util.*;
 
 public class PrivateChatFrame extends JFrame {
     private ChatClient client;
@@ -29,7 +29,8 @@ public class PrivateChatFrame extends JFrame {
     private JLabel placeholderLabel;
     private int unreadCount = 0;
     private boolean hasFocus = false;
-    private JLabel typingLabel;
+private TypingDots typingDots;
+private Timer typingTimeoutTimer;
     private Timer typingTimer;
     private Boolean isTyping = false;
     private Message replyingTo = null;
@@ -38,13 +39,16 @@ private JPanel inputContainer;
 private Consumer<Message> onReplyCallback;
 private boolean hasUnreadMessages = false;
 private NewMessageDivider unreadDivider;
+private boolean isFirstShow = true;
     
     public PrivateChatFrame(ChatClient client, String recipient) {
         this.client = client;
         this.recipient = recipient;
+        this.hasFocus = true;
         
         initializeUI();
         setupCallback();
+
 
         addWindowFocusListener(new WindowAdapter() {
             @Override
@@ -60,6 +64,30 @@ private NewMessageDivider unreadDivider;
             }
         });
     }
+
+     /**
+     * Show window with slide-in animation
+     */
+    public void showWithAnimation() {
+        if (isFirstShow || !isVisible()) {
+            AnimationUtils.slideInFromRight(this);
+            isFirstShow = false;
+        } else {
+            setVisible(true);
+            toFront();
+        }
+    }
+    
+    
+    @Override
+public void dispose() {
+    super.dispose();
+}
+    
+    
+    
+    
+    
     
 private void initializeUI() {
     ModernTheme.applyTheme();
@@ -95,14 +123,11 @@ private void initializeUI() {
     scrollPane.setBorder(null);
     scrollPane.getViewport().setBackground(ModernTheme.BACKGROUND_CHAT);
     scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-    
-    // Typing indicator label
-    typingLabel = new JLabel(" ");
-    typingLabel.setFont(ModernTheme.FONT_SMALL);
-    typingLabel.setForeground(ModernTheme.TEXT_MUTED);
-    typingLabel.setHorizontalAlignment(SwingConstants.CENTER);
-    typingLabel.setBorder(BorderFactory.createEmptyBorder(4, 16, 4, 16));
-    
+
+    typingDots = new TypingDots(recipient);
+    typingDots.setVisible(false);
+    typingDots.setBorder(BorderFactory.createEmptyBorder(4, 16, 4, 16));
+
     // Create input container (holds reply indicator + typing label + input panel)
     inputContainer = new JPanel(new BorderLayout());
     inputContainer.setBackground(ModernTheme.BACKGROUND_DARK);
@@ -112,7 +137,7 @@ private void initializeUI() {
     
     // Add components to input container in correct order
     // Reply indicator will be added here dynamically when replying
-    inputContainer.add(typingLabel, BorderLayout.NORTH);
+    inputContainer.add(typingDots, BorderLayout.NORTH);
     inputContainer.add(inputPanel, BorderLayout.SOUTH);
     
     mainPanel.add(scrollPane, BorderLayout.CENTER);
@@ -164,13 +189,16 @@ addWindowFocusListener(new WindowAdapter() {
         hasFocus = false;
     }
 });
+
+addWindowListener(new WindowAdapter() {
+    @Override
+    public void windowClosing(WindowEvent e) {
+        dispose();
+    }
+});
+
+
     
-    addWindowListener(new WindowAdapter() {
-        @Override
-        public void windowClosing(WindowEvent e) {
-            dispose();
-        }
-    });
 }
 
 private void addUnreadDivider() {
@@ -294,6 +322,11 @@ private void setupCallback() {
                     ToastNotification.show(PrivateChatFrame.this, title, content, message.getType());
                 }
                     addMessageToUI(message);
+
+                    Component lastAdded = messagesPanel.getComponent(messagesPanel.getComponentCount() - 2);
+            if (lastAdded instanceof MessageBubble) {
+                AnimationUtils.bounce((MessageBubble) lastAdded);
+            }
                     
                     // Count unread messages from recipient
                     if (!hasFocus && message.getSender().equals(recipient)) {
@@ -314,22 +347,28 @@ private void setupCallback() {
     });
     
 
-    client.getCallbackImpl().addTypingListener(username -> {
-        if (username.equals(recipient)) {
-            SwingUtilities.invokeLater(() -> {
-                typingLabel.setText(username + " is typing...");
-                
-                // Cancel existing timer
-                if (typingTimer != null) {
-                    typingTimer.stop();
-                }
-                // Hide after 2 seconds
-                typingTimer = new Timer(2000, e -> typingLabel.setText(" "));
-                typingTimer.setRepeats(false);
-                typingTimer.start();
+// Add typing listener in setupCallback():
+client.getCallbackImpl().addTypingListener(username -> {
+    if (username.equals(recipient)) {
+        SwingUtilities.invokeLater(() -> {
+            typingDots.setVisible(true);
+            typingDots.startAnimation();
+            
+            // Stop existing timeout timer
+            if (typingTimeoutTimer != null) {
+                typingTimeoutTimer.stop();
+            }
+            
+            // Auto-hide after 2.5 seconds of no typing
+            typingTimeoutTimer = new Timer(2500, e -> {
+                typingDots.stopAnimation();
+                typingDots.setVisible(false);
             });
-        }
-    });
+            typingTimeoutTimer.setRepeats(false);
+            typingTimeoutTimer.start();
+        });
+    }
+});
 
 client.getCallbackImpl().addDeleteListener(messageId -> {
     SwingUtilities.invokeLater(() -> {
@@ -369,13 +408,18 @@ private void updateTitle() {
             }
             
             updatePlaceholder();
+
+            SwingUtilities.invokeLater(() -> {
+                JScrollBar vertical = scrollPane.getVerticalScrollBar();
+                vertical.setValue(vertical.getMaximum());
+            });
             
         } catch (RemoteException e) {
             System.err.println("Failed to load conversation history: " + e.getMessage());
         }
     }
     
-    private void addMessageToUI(Message message) {
+private void addMessageToUI(Message message) {
     placeholderLabel.setVisible(false);
     
     boolean isOwnMessage = message.getSender().equals(client.getUsername());
@@ -383,17 +427,17 @@ private void updateTitle() {
         deleteMessage(msg);
     });
     
-    // Add reply handler
     bubble.addReplyHandler(msg -> {
         startReply(msg);
     });
 
-        if (!hasFocus && hasUnreadMessages && unreadDivider == null && 
+    if (!hasFocus && hasUnreadMessages && unreadDivider == null && 
         message.getSender().equals(recipient)) {
         addUnreadDivider();
     }
     
-    // Rest of existing addMessageToUI code...
+    bubble.setVisible(false);
+    
     int insertPosition = messagesPanel.getComponentCount() - 1;
     messagesPanel.add(bubble, insertPosition);
     messagesPanel.add(Box.createVerticalStrut(5), insertPosition + 1);
@@ -402,9 +446,58 @@ private void updateTitle() {
     messagesPanel.repaint();
     
     SwingUtilities.invokeLater(() -> {
-        JScrollBar vertical = scrollPane.getVerticalScrollBar();
-        vertical.setValue(vertical.getMaximum());
+        bubble.setVisible(true);
+        fadeInMessage(bubble);
+
+    if (!isOwnMessage && message.getSender().equals(recipient)) {
+        Timer bounceTimer = new Timer(250, e -> {
+            AnimationUtils.bounce(bubble);
+            ((Timer) e.getSource()).stop();
+        });
+        bounceTimer.setRepeats(false);
+        bounceTimer.start();
+    }
+        
+        // Auto-scroll
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar vertical = scrollPane.getVerticalScrollBar();
+            vertical.setValue(vertical.getMaximum());
+        });
     });
+}
+
+
+private void fadeInMessage(JComponent component) {
+    component.setOpaque(false);
+    
+    Timer timer = new Timer(20, null);
+    final float[] alpha = {0.0f};
+    
+    timer.addActionListener(e -> {
+        alpha[0] += 0.05f;
+        if (alpha[0] >= 1.0f) {
+            alpha[0] = 1.0f;
+            ((Timer) e.getSource()).stop();
+            component.setOpaque(true);
+        }
+        
+        // Apply alpha to all child components
+        applyAlpha(component, alpha[0]);
+        component.repaint();
+    });
+    
+    timer.start();
+}
+
+private void applyAlpha(Component comp, float alpha) {
+    if (comp instanceof JComponent) {
+        ((JComponent) comp).putClientProperty("fadeOpacity", alpha);
+    }
+    if (comp instanceof Container) {
+        for (Component child : ((Container) comp).getComponents()) {
+            applyAlpha(child, alpha);
+        }
+    }
 }
     
     private void updatePlaceholder() {
