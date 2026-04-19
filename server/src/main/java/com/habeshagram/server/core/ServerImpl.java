@@ -532,4 +532,29 @@ public List<Message> getRecentGroupMessages(String username, int limit) throws R
     return messageDAO.getRecentGroupMessagesForUser(username, limit);
 }
 
+@Override
+public void markMessageAsDelivered(String messageId) throws RemoteException {
+    messageDAO.markAsDelivered(messageId);
+}
+
+@Override
+public void markPrivateMessagesAsRead(String reader, String sender) throws RemoteException {
+    messageDAO.markPrivateMessagesAsRead(reader, sender);
+    
+    // Notify sender that messages were read
+    IClientCallback senderCallback = clientRegistry.getClient(sender);
+    if (senderCallback != null) {
+        try {
+            senderCallback.messagesRead(reader);
+        } catch (RemoteException e) {
+            // Ignore
+        }
+    }
+}
+
+@Override
+public void markGroupMessagesAsRead(String reader, String groupName) throws RemoteException {
+    messageDAO.markGroupMessagesAsRead(reader, groupName);
+}
+
 }

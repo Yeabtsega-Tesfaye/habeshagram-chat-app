@@ -19,4 +19,6 @@ void groupUserTyping(String username, String groupName) throws RemoteException;
     void userStatusMessageChanged(String username, String newStatus) throws RemoteException;
 
     void messageDeleted(String messageId) throws RemoteException;
+
+void messagesRead(String reader) throws RemoteException;
 }

@@ -6,7 +6,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 public class Message implements Serializable {
-    private static final long serialVersionUID = 1L;
+   private static final long serialVersionUID = 1L;
+    
+    public enum MessageStatus {
+        SENT,      // Message sent by client
+        DELIVERED, // Reached server and stored
+        READ       // Recipient opened the chat
+    }
     
     private String id;
     private MessageType type;
@@ -14,13 +20,21 @@ public class Message implements Serializable {
     private String recipient;
     private String content;
     private LocalDateTime timestamp;
+    
+    // Reply fields
     private String replyToId;
     private String replyToSender;
     private String replyToContent;
     
+    // Status fields
+    private MessageStatus status = MessageStatus.SENT;
+    private LocalDateTime deliveredAt;
+    private LocalDateTime readAt;
+    
     public Message() {
         this.id = UUID.randomUUID().toString();
         this.timestamp = LocalDateTime.now();
+        this.status = MessageStatus.SENT;
     }
     
     public Message(MessageType type, String sender, String content) {
@@ -53,6 +67,18 @@ public class Message implements Serializable {
     
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+
+public MessageStatus getStatus() { return status; }
+public void setStatus(MessageStatus status) { this.status = status; }
+
+public LocalDateTime getDeliveredAt() { return deliveredAt; }
+public void setDeliveredAt(LocalDateTime deliveredAt) { this.deliveredAt = deliveredAt; }
+
+public LocalDateTime getReadAt() { return readAt; }
+public void setReadAt(LocalDateTime readAt) { this.readAt = readAt; }
+
+    public boolean isRead() { return status == MessageStatus.READ; }
+    public boolean isDelivered() { return status == MessageStatus.DELIVERED || status == MessageStatus.READ; }
     
     public String getReplyToId() { return replyToId; }
     public void setReplyToId(String replyToId) { this.replyToId = replyToId; }

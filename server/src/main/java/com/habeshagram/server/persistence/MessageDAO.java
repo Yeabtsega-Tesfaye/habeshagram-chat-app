@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -16,8 +17,8 @@ public class MessageDAO {
 
     public void saveMessage(Message message) {
         String sql = "INSERT INTO messages (id, type, sender, recipient, content, timestamp, " +
-                "reply_to_id, reply_to_sender, reply_to_content) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "reply_to_id, reply_to_sender, reply_to_content, status) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = DatabaseManager.getInstance().getConnection();
                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -31,6 +32,7 @@ public class MessageDAO {
             pstmt.setString(7, message.getReplyToId());
             pstmt.setString(8, message.getReplyToSender());
             pstmt.setString(9, message.getReplyToContent());
+            pstmt.setString(10, message.getStatus().name());
 
             pstmt.executeUpdate();
 
@@ -41,6 +43,61 @@ public class MessageDAO {
             System.err.println("Error saving message: " + e.getMessage());
         }
     }
+
+    // Mark message as delivered
+public void markAsDelivered(String messageId) {
+    String sql = "UPDATE messages SET status = 'DELIVERED', delivered_at = ? WHERE id = ?";
+    
+    try (Connection conn = DatabaseManager.getInstance().getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+        pstmt.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+        pstmt.setString(2, messageId);
+        pstmt.executeUpdate();
+        
+    } catch (SQLException e) {
+        System.err.println("Error marking message as delivered: " + e.getMessage());
+    }
+}
+
+
+// Mark all private messages from sender to reader as READ
+public void markPrivateMessagesAsRead(String reader, String sender) {
+    String sql = "UPDATE messages SET status = 'READ', read_at = ? " +
+                 "WHERE type = 'PRIVATE' AND sender = ? AND recipient = ? AND status != 'READ'";
+    
+    try (Connection conn = DatabaseManager.getInstance().getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+        pstmt.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+        pstmt.setString(2, sender);
+        pstmt.setString(3, reader);
+        pstmt.executeUpdate();
+        
+    } catch (SQLException e) {
+        System.err.println("Error marking messages as read: " + e.getMessage());
+    }
+}
+
+
+// Mark all group messages as read for a user
+public void markGroupMessagesAsRead(String reader, String groupName) {
+    String sql = "UPDATE message_deliveries SET delivered = TRUE, delivered_at = ? " +
+                 "WHERE recipient_username = ? AND message_id IN " +
+                 "(SELECT id FROM messages WHERE type = 'GROUP' AND recipient = ?)";
+    
+    try (Connection conn = DatabaseManager.getInstance().getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+        pstmt.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now()));
+        pstmt.setString(2, reader);
+        pstmt.setString(3, groupName);
+        pstmt.executeUpdate();
+        
+    } catch (SQLException e) {
+        System.err.println("Error marking group messages as read: " + e.getMessage());
+    }
+}
 
     private void createDeliveryRecords(Message message) {
         List<String> recipients = new ArrayList<>();
@@ -276,11 +333,26 @@ public class MessageDAO {
         message.setRecipient(rs.getString("recipient"));
         message.setContent(rs.getString("content"));
         message.setTimestamp(rs.getTimestamp("timestamp").toLocalDateTime());
-
-        // ADD THESE LINES - Extract reply data
         message.setReplyToId(rs.getString("reply_to_id"));
         message.setReplyToSender(rs.getString("reply_to_sender"));
         message.setReplyToContent(rs.getString("reply_to_content"));
+
+
+         // Add status
+    String statusStr = rs.getString("status");
+    if (statusStr != null) {
+        message.setStatus(Message.MessageStatus.valueOf(statusStr));
+    }
+    
+    Timestamp deliveredTs = rs.getTimestamp("delivered_at");
+    if (deliveredTs != null) {
+        message.setDeliveredAt(deliveredTs.toLocalDateTime());
+    }
+    
+    Timestamp readTs = rs.getTimestamp("read_at");
+    if (readTs != null) {
+        message.setReadAt(readTs.toLocalDateTime());
+    }
 
         return message;
     }

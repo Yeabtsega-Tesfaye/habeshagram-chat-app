@@ -26,7 +26,6 @@ public interface IServer extends Remote {
 
         void sendGroup(String sender, String groupName, String content) throws RemoteException;
 
-        // Group management
         void createGroup(String creator, String groupName) throws RemoteException;
 
         void joinGroup(String username, String groupName)
@@ -37,10 +36,8 @@ public interface IServer extends Remote {
 
         List<Group> getAvailableGroups() throws RemoteException;
 
-        // Utility
         List<String> getOnlineUsers() throws RemoteException;
 
-        // NEW METHODS FOR MESSAGE HISTORY
         List<Message> getRecentMessages(String username, int limit) throws RemoteException;
 
         List<Message> getPrivateHistory(String user1, String user2, int limit) throws RemoteException;
@@ -49,18 +46,14 @@ public interface IServer extends Remote {
 
         List<User> getAllUsers() throws RemoteException;
 
-        // Add to IServer.java
         void leaveGroup(String username, String groupName) throws RemoteException, GroupNotFoundException;
 
-        // Add method:
         void sendTypingIndicator(String username, String recipient) throws RemoteException;
 
         void sendGroupTypingIndicator(String username, String groupName) throws RemoteException;
 
-        // Add method for broadcast typing
         void sendBroadcastTypingIndicator(String username) throws RemoteException;
 
-        // Add these methods to IServer interface
         void setUserStatus(String username, String status) throws RemoteException;
 
         String getUserStatus(String username) throws RemoteException;
@@ -78,4 +71,8 @@ public interface IServer extends Remote {
         List<Message> getRecentPrivateMessages(String username, int limit) throws RemoteException;
 
         List<Message> getRecentGroupMessages(String username, int limit) throws RemoteException;
+
+void markMessageAsDelivered(String messageId) throws RemoteException;
+void markPrivateMessagesAsRead(String reader, String sender) throws RemoteException;
+void markGroupMessagesAsRead(String reader, String groupName) throws RemoteException;
 }

@@ -91,6 +91,7 @@ private boolean isFirstShow = true;
 private void initializeUI() {
     ModernTheme.applyTheme();
     setTitle("Group Chat - " + groupName);
+    setAppIcon();
     setSize(900, 900);
     getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
     
@@ -365,10 +366,6 @@ private JPanel createInputPanel() {
                 });
             }
         });
-
-    client.getCallbackImpl().addMessageListener(message -> {
-        // ... existing message handling ...
-    });
     
 // Add typing listener in setupCallback():
 client.getCallbackImpl().addTypingListener(username -> {
@@ -608,6 +605,21 @@ private void cancelReply() {
     
     inputField.putClientProperty("JTextField.placeholderText", "Type a message...");
     inputField.repaint();
+}
+
+private void setAppIcon() {
+    try {
+        java.net.URL iconURL = getClass().getClassLoader().getResource("logo-32.png");
+        if (iconURL != null) {
+            ImageIcon icon = new ImageIcon(iconURL);
+            setIconImage(icon.getImage());
+        } else {
+            // Fallback: Use emoji/text icon
+            System.out.println("Logo not found, using default");
+        }
+    } catch (Exception e) {
+        System.err.println("Could not load app icon: " + e.getMessage());
+    }
 }
 
 }

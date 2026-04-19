@@ -298,23 +298,35 @@ private JPanel createFooter(Message message, boolean isOwnMessage) {
     JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
     footer.setOpaque(false);
     
-    JLabel timeLabel = new JLabel(message.getFormattedTime());
-    timeLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(10f));
-    
-    if (message.getType() == MessageType.SYSTEM) {
-        timeLabel.setForeground(ModernTheme.TEXT_MUTED);
-        // Center the time for system messages
-        footer = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 0));
-        footer.setOpaque(false);
-    } else if (isOwnMessage) {
-        timeLabel.setForeground(new Color(255, 255, 255, 180));
-    } else {
-        timeLabel.setForeground(ModernTheme.TEXT_MUTED);
+    // Status icon for own messages
+    if (isOwnMessage && message.getType() != MessageType.SYSTEM) {
+        JLabel statusLabel = new JLabel(getStatusText(message));
+        statusLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
+        
+        if (message.isRead()) {
+            statusLabel.setForeground(ModernTheme.ACCENT_BLUE); // Blue for read
+        } else {
+            statusLabel.setForeground(new Color(255, 255, 255, 150));
+        }
+        footer.add(statusLabel);
+        footer.add(Box.createHorizontalStrut(4));
     }
     
+    JLabel timeLabel = new JLabel(message.getFormattedTime());
+    timeLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(10f));
+    timeLabel.setForeground(isOwnMessage ? new Color(255, 255, 255, 180) : ModernTheme.TEXT_MUTED);
     footer.add(timeLabel);
     
     return footer;
+}
+
+private String getStatusText(Message message) {
+    switch (message.getStatus()) {
+        case SENT: return "✓";
+        case DELIVERED: return "✓✓";
+        case READ: return "✓✓";
+        default: return "✓";
+    }
 }
 
     public void addReplyHandler(Consumer<Message> handler) {

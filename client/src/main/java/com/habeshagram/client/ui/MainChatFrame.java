@@ -65,6 +65,7 @@ private ShimmerPanel shimmerPanel;
     private void initializeUI() {
         ModernTheme.applyTheme();
         setTitle("Habeshagram - " + client.getUsername());
+        setAppIcon();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1100, 1000);
         getContentPane().setBackground(ModernTheme.BACKGROUND_DARK);
@@ -933,32 +934,10 @@ private void applyAlpha(Component comp, float alpha) {
         dispose();
     }
 
-    private void showAbout() {
-        SwingUtils.showInfo(this, "About Habeshagram",
-                "Habeshagram Chat Application\n" +
-                        "Version 1.0\n\n" +
-
-                        "Habeshagram is a distributed chat application designed and developed " +
-                        "as part of an Advanced Programming and Distributed Systems project.\n\n" +
-
-                        "This application allows users to communicate in real-time through " +
-                        "a client-server architecture powered by Java RMI (Remote Method Invocation). " +
-                        "It demonstrates core concepts such as remote communication, object serialization, " +
-                        "and concurrent client handling.\n\n" +
-
-                        "Key Features:\n" +
-                        "- Real-time messaging\n" +
-                        "- Private and group chat support\n" +
-                        "- User status management\n" +
-                        "- Modular and scalable design\n\n" +
-
-                        "This project reflects a strong focus on clean architecture, " +
-                        "code organization using Maven, and practical implementation of " +
-                        "distributed system concepts.\n\n" +
-
-                        "Developed with dedication as part of my journey in software engineering.\n" +
-                        "— Yeabtsega Tesfaye");
-    }
+private void showAbout() {
+    AboutDialog dialog = new AboutDialog(this);
+    dialog.setVisible(true);
+}
 
     private void setupCallbacks() {
    client.getCallbackImpl().addMessageListener(message -> {
@@ -1171,6 +1150,21 @@ private void removeUnreadDivider() {
         chatMessagesPanel.revalidate();
         chatMessagesPanel.repaint();
         unreadDivider = null;
+    }
+}
+
+private void setAppIcon() {
+    try {
+        java.net.URL iconURL = getClass().getClassLoader().getResource("images/logo-32.png");
+        if (iconURL != null) {
+            ImageIcon icon = new ImageIcon(iconURL);
+            setIconImage(icon.getImage());
+        } else {
+            // Fallback: Use emoji/text icon
+            System.out.println("Logo not found, using default");
+        }
+    } catch (Exception e) {
+        System.err.println("Could not load app icon: " + e.getMessage());
     }
 }
 
