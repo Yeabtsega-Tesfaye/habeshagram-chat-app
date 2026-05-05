@@ -18,7 +18,7 @@ public class TypingDots extends JPanel {
         setLayout(new FlowLayout(FlowLayout.LEFT, 8, 0));
 
         // Username label
-        JLabel nameLabel = new JLabel(username);
+        nameLabel = new JLabel(username);
         nameLabel.setFont(ModernTheme.FONT_SMALL.deriveFont(Font.BOLD));
         nameLabel.setForeground(ModernTheme.PRIMARY);
         add(nameLabel);
@@ -57,10 +57,12 @@ public class TypingDots extends JPanel {
         });
     }
 
-    public void updateUsername(String newUsername) {
-        this.username = newUsername;
-        this.nameLabel.setText(newUsername);
+public void updateUsername(String username) {
+    this.username = username;
+    if (nameLabel != null) {
+        nameLabel.setText(username);
     }
+}
 
     public void startAnimation() {
         dotCount = 1;

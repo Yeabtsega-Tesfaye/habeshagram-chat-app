@@ -1,6 +1,17 @@
 package com.habeshagram.client.ui.components;
 
-import java.awt.*;
+import java.awt.AlphaComposite;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Consumer;
@@ -12,14 +23,10 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.border.EmptyBorder;
-import java.awt.event.MouseEvent;
 
 import com.habeshagram.client.ui.theme.ModernTheme;
 import com.habeshagram.common.model.Message;
 import com.habeshagram.common.model.MessageType;
-
-import com.habeshagram.client.ui.components.ContextMenuFactory;
-import java.awt.event.MouseAdapter;
 
 public class MessageBubble extends JPanel {
     private static final int MAX_BUBBLE_WIDTH = 400;
@@ -28,6 +35,7 @@ public class MessageBubble extends JPanel {
     private boolean isOwnMessage;
     private Consumer<Message> onDelete;
     private Consumer<Message> onReply;
+    private JLabel statusLabel;
     
     public MessageBubble(Message message, boolean isOwnMessage, Consumer<Message> onDelete) {
         setLayout(new BorderLayout());
@@ -144,17 +152,15 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             
-                Float fadeOpacity = (Float) getClientProperty("fadeOpacity");
-    if (fadeOpacity != null && fadeOpacity < 1.0f) {
-        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fadeOpacity));
-    }
+            Float fadeOpacity = (Float) getClientProperty("fadeOpacity");
+            if (fadeOpacity != null && fadeOpacity < 1.0f) {
+                g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, fadeOpacity));
+            }
 
             // Draw shadow
             g2.setColor(new Color(0, 0, 0, 20));
             g2.fill(new RoundRectangle2D.Double(2, 2, getWidth() - 1, getHeight() - 1, 12, 12));
 
-
-            
             // Draw bubble
             Color bgColor = getBubbleColor(message, isOwnMessage);
             g2.setColor(bgColor);
@@ -184,21 +190,17 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
             JPanel ownHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
             ownHeader.setOpaque(false);
             
-            // Icon indicator
             if (message.getType() == MessageType.PRIVATE) {
                 JLabel icon = new JLabel("🔒");
                 icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
-                icon.setToolTipText("Private Message");
                 ownHeader.add(icon);
             } else if (message.getType() == MessageType.GROUP) {
                 JLabel icon = new JLabel("👥");
                 icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
-                icon.setToolTipText("Group: " + message.getRecipient());
                 ownHeader.add(icon);
             } else if (message.getType() == MessageType.BROADCAST) {
                 JLabel icon = new JLabel("📢");
                 icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
-                icon.setToolTipText("Broadcast Message");
                 ownHeader.add(icon);
             }
             
@@ -210,7 +212,6 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
             panel.add(ownHeader);
             panel.add(Box.createVerticalStrut(4));
         } else {
-            // Full header for others' messages
             JPanel headerPanel = createHeader(message, isOwnMessage);
             panel.add(headerPanel);
             panel.add(Box.createVerticalStrut(4));
@@ -225,13 +226,13 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
     contentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
     panel.add(contentLabel);
     
-    // ADD FOOTER FOR SYSTEM MESSAGES (since they don't have header with time)
+    // ✅ Footer for EVERY message, not only system
+    panel.add(Box.createVerticalStrut(4));
+    JPanel footerPanel = createFooter(message, isOwnMessage);
     if (message.getType() == MessageType.SYSTEM) {
-        panel.add(Box.createVerticalStrut(4));
-        JPanel footerPanel = createFooter(message, isOwnMessage);
         footerPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panel.add(footerPanel);
     }
+    panel.add(footerPanel);
     
     // Calculate preferred size
     int width = Math.min(MAX_BUBBLE_WIDTH, panel.getPreferredSize().width);
@@ -239,7 +240,7 @@ private JPanel createBubblePanel(Message message, boolean isOwnMessage) {
     
     return panel;
 }
-    
+
   private Color getBubbleColor(Message message, boolean isOwnMessage) {
         if (message.getType() == MessageType.SYSTEM) {
             return ModernTheme.BUBBLE_SYSTEM;
@@ -300,14 +301,17 @@ private JPanel createFooter(Message message, boolean isOwnMessage) {
     
     // Status icon for own messages
     if (isOwnMessage && message.getType() != MessageType.SYSTEM) {
-        JLabel statusLabel = new JLabel(getStatusText(message));
+         this.statusLabel = new JLabel(getStatusText(message));
         statusLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 11));
         
-        if (message.isRead()) {
-            statusLabel.setForeground(ModernTheme.ACCENT_BLUE); // Blue for read
-        } else {
-            statusLabel.setForeground(new Color(255, 255, 255, 150));
-        }
+if (message.isRead()) {
+    statusLabel.setForeground(new Color(255, 255, 255, 255));  // solid white
+} else if (message.isDelivered()) {
+    statusLabel.setForeground(new Color(255, 255, 255, 180));
+} else {
+    statusLabel.setForeground(new Color(255, 255, 255, 120));
+}
+
         footer.add(statusLabel);
         footer.add(Box.createHorizontalStrut(4));
     }
@@ -322,14 +326,38 @@ private JPanel createFooter(Message message, boolean isOwnMessage) {
 
 private String getStatusText(Message message) {
     switch (message.getStatus()) {
-        case SENT: return "✓";
-        case DELIVERED: return "✓✓";
-        case READ: return "✓✓";
-        default: return "✓";
+        case SENT:     return "Sent";
+        case DELIVERED: return "Delivered";
+        case READ:     return "Read";
+        default:       return "Sent";
     }
 }
 
     public void addReplyHandler(Consumer<Message> handler) {
         this.onReply = handler;
     }
+
+    public Message getMessage() {
+    return message;
+}
+
+public void updateStatus(Message.MessageStatus newStatus) {
+    this.message.setStatus(newStatus);
+    if (statusLabel != null) {
+        String text = switch (newStatus) {
+            case SENT -> "Sent";
+            case DELIVERED -> "Delivered";
+            case READ -> "Read";
+        };
+        statusLabel.setText(text);
+
+        Color color = switch (newStatus) {
+            case SENT     -> new Color(255, 255, 255, 120);
+            case DELIVERED -> new Color(255, 255, 255, 180);
+            case READ     -> new Color(255, 255, 255, 255);
+        };
+        statusLabel.setForeground(color);
+        repaint();
+    }
+}
 }

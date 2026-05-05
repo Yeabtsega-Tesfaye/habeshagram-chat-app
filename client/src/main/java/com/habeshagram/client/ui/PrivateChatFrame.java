@@ -302,95 +302,124 @@ public class PrivateChatFrame extends JFrame {
         return header;
     }
 
-    private void setupCallback() {
-        client.getCallbackImpl().addMessageListener(message -> {
-            if (message.getType() == MessageType.PRIVATE &&
-                    (message.getSender().equals(recipient) ||
-                            (message.getRecipient() != null && message.getRecipient().equals(recipient)))) {
-                SwingUtilities.invokeLater(() -> {
-                    if (!displayedMessageIds.contains(message.getId())) {
-                        displayedMessageIds.add(message.getId());
-
-                        if (!hasFocus && !message.getSender().equals(client.getUsername())) {
-                            hasUnreadMessages = true;
-
-                            // Show toast notification
-                            String title = message.getSender();
-                            String content = message.getContent();
-                            if (content.length() > 50) {
-                                content = content.substring(0, 47) + "...";
-                            }
-                            ToastNotification.show(PrivateChatFrame.this, title, content, message.getType());
-                        }
-                        addMessageToUI(message);
-
-                        Component lastAdded = messagesPanel.getComponent(messagesPanel.getComponentCount() - 2);
-                        if (lastAdded instanceof MessageBubble) {
-                            AnimationUtils.bounce((MessageBubble) lastAdded);
-                        }
-
-                        // Count unread messages from recipient
-                        if (!hasFocus && message.getSender().equals(recipient)) {
-                            unreadCount++;
-                            updateTitle();
-                        }
-
-                        if (message.getSender().equals(recipient)) {
-                            SoundManager.playMessageSound();
-                        }
-                    }
-                });
-
-                if (!hasFocus && message.getSender().equals(recipient)) {
-                    playNotificationSound();
-                }
-            }
-        });
-
-        // Add typing listener in setupCallback():
-        client.getCallbackImpl().addTypingListener(username -> {
-            if (username.equals(recipient)) {
-                SwingUtilities.invokeLater(() -> {
-                    typingDots.setVisible(true);
-                    typingDots.startAnimation();
-
-                    // Stop existing timeout timer
-                    if (typingTimeoutTimer != null) {
-                        typingTimeoutTimer.stop();
-                    }
-
-                    // Auto-hide after 2.5 seconds of no typing
-                    typingTimeoutTimer = new Timer(2500, e -> {
-                        typingDots.stopAnimation();
-                        typingDots.setVisible(false);
-                    });
-                    typingTimeoutTimer.setRepeats(false);
-                    typingTimeoutTimer.start();
-                });
-            }
-        });
-
-        client.getCallbackImpl().addDeleteListener(messageId -> {
+private void setupCallback() {
+    client.getCallbackImpl().addMessageListener(message -> {
+        if (message.getType() == MessageType.PRIVATE &&
+                (message.getSender().equals(recipient) ||
+                        (message.getRecipient() != null && message.getRecipient().equals(recipient)))) {
             SwingUtilities.invokeLater(() -> {
-                if (displayedMessageIds.remove(messageId)) {
-                    refreshChatMessages();
+                if (!displayedMessageIds.contains(message.getId())) {
+                    displayedMessageIds.add(message.getId());
+
+                    if (!hasFocus && !message.getSender().equals(client.getUsername())) {
+                        hasUnreadMessages = true;
+                        String title = message.getSender();
+                        String content = message.getContent();
+                        if (content.length() > 50) {
+                            content = content.substring(0, 47) + "...";
+                        }
+                        ToastNotification.show(PrivateChatFrame.this, title, content, message.getType());
+                    }
+                    addMessageToUI(message);
+
+                    // bounce & sound
+                    Component lastAdded = messagesPanel.getComponent(messagesPanel.getComponentCount() - 2);
+                    if (lastAdded instanceof MessageBubble) {
+                        AnimationUtils.bounce((MessageBubble) lastAdded);
+                    }
+                    if (!hasFocus && message.getSender().equals(recipient)) {
+                        unreadCount++;
+                        updateTitle();
+                        SoundManager.playMessageSound();
+                    }
                 }
             });
-        });
+        }
+    });
 
-        client.getCallbackImpl().addReadListener(reader -> {
-    if (reader.equals(recipient)) {
-        // Recipient read our messages - update UI
-        SwingUtilities.invokeLater(() -> {
-            refreshMessagesStatus();
-        });
-    }
-});
+    // Typing listener
+    client.getCallbackImpl().addTypingListener(username -> {
+        if (username.equals(recipient)) {
+            SwingUtilities.invokeLater(() -> {
+                typingDots.setVisible(true);
+                typingDots.startAnimation();
+                if (typingTimeoutTimer != null) typingTimeoutTimer.stop();
+                typingTimeoutTimer = new Timer(2500, e -> {
+                    typingDots.stopAnimation();
+                    typingDots.setVisible(false);
+                });
+                typingTimeoutTimer.setRepeats(false);
+                typingTimeoutTimer.start();
+            });
+        }
+    });
 
+    // Delete listener
+    client.getCallbackImpl().addDeleteListener(messageId -> {
         SwingUtilities.invokeLater(() -> {
-            loadConversationHistory();
+            if (displayedMessageIds.remove(messageId)) {
+                refreshChatMessages();
+            }
         });
+    });
+
+    // READ LISTENER: do NOT call refreshMessagesStatus or loadConversationHistory.
+    // Instead, just mark the messages as read on the spot.
+    client.getCallbackImpl().addReadListener(reader -> {
+        if (reader.equals(recipient)) {
+            SwingUtilities.invokeLater(() -> {
+                for (Component comp : messagesPanel.getComponents()) {
+                    if (comp instanceof MessageBubble bubble) {
+                        Message msg = bubble.getMessage();
+                        if (msg != null
+                                && msg.getType() == MessageType.PRIVATE
+                                && msg.getSender().equals(client.getUsername())
+                                && msg.getStatus() != Message.MessageStatus.READ) {
+                            bubble.updateStatus(Message.MessageStatus.READ);
+                        }
+                    }
+                }
+                messagesPanel.repaint();
+            });
+        }
+    });
+
+    // Load history once, after a tiny delay to ensure UI is ready
+    new Timer(300, e -> {
+        loadConversationHistory();
+        ((Timer) e.getSource()).stop();
+    }).start();
+}
+
+private void loadConversationHistory() {
+    try {
+        List<Message> history = client.getPrivateHistory(client.getUsername(), recipient, HISTORY_LIMIT);
+        for (Message msg : history) {
+            if (!displayedMessageIds.contains(msg.getId())) {
+                displayedMessageIds.add(msg.getId());
+                addMessageToUI(msg);
+            }
+        }
+        updatePlaceholder();
+
+        // After adding all messages, force-update the status icons from the loaded status
+        SwingUtilities.invokeLater(() -> {
+            for (Component comp : messagesPanel.getComponents()) {
+                if (comp instanceof MessageBubble bubble) {
+                    Message msg = bubble.getMessage();
+                    if (msg != null && msg.getType() == MessageType.PRIVATE) {
+                        bubble.updateStatus(msg.getStatus());
+                    }
+                }
+            }
+            JScrollBar vertical = scrollPane.getVerticalScrollBar();
+            vertical.setValue(vertical.getMaximum());
+        });
+    } catch (RemoteException e) {
+        System.err.println("Failed to load conversation history: " + e.getMessage());
     }
+}
+
 
     private void refreshMessagesStatus() {
     // Reload conversation to get updated status
@@ -408,33 +437,7 @@ public class PrivateChatFrame extends JFrame {
             setTitle("Private Chat - " + recipient);
         }
     }
-
-    private void loadConversationHistory() {
-        try {
-            List<Message> history = client.getPrivateHistory(
-                    client.getUsername(),
-                    recipient,
-                    HISTORY_LIMIT);
-
-            for (Message msg : history) {
-                if (!displayedMessageIds.contains(msg.getId())) {
-                    displayedMessageIds.add(msg.getId());
-                    addMessageToUI(msg);
-                }
-            }
-
-            updatePlaceholder();
-
-            SwingUtilities.invokeLater(() -> {
-                JScrollBar vertical = scrollPane.getVerticalScrollBar();
-                vertical.setValue(vertical.getMaximum());
-            });
-
-        } catch (RemoteException e) {
-            System.err.println("Failed to load conversation history: " + e.getMessage());
-        }
-    }
-
+    
     private void addMessageToUI(Message message) {
         placeholderLabel.setVisible(false);
 
